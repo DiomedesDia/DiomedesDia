@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 // calendar.events cubre lectura y escritura de eventos (crear/editar/borrar), sin dar acceso
-// a la configuración de los calendarios en sí. Necesario para poder sincronizar los objetivos
-// diarios como eventos.
-const SCOPE = 'https://www.googleapis.com/auth/calendar.events'
-// v2 porque el scope cambió (antes era solo lectura): un token viejo guardado no alcanza y
-// hay que forzar un nuevo inicio de sesión que pida el permiso de escritura.
-const TOKEN_STORAGE_KEY = 'gcal-access-token-v2'
+// a la configuración de los calendarios en sí. userinfo.email es para saber QUÉ cuenta está
+// conectada (para poder separar el horario de cada una).
+const SCOPE = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email'
+// v3 porque el scope cambió (se agregó email): un token viejo guardado no alcanza y hay que
+// forzar un nuevo inicio de sesión que pida el permiso nuevo.
+const TOKEN_STORAGE_KEY = 'gcal-access-token-v3'
 
 interface StoredToken {
   accessToken: string
   expiresAt: number
+  email: string | null
 }
 
 declare global {
@@ -42,9 +43,24 @@ function loadStoredToken(): StoredToken | null {
   }
 }
 
+async function fetchAccountEmail(accessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (!res.ok) return null
+    const data = (await res.json()) as { email?: string }
+    return data.email ?? null
+  } catch {
+    return null
+  }
+}
+
 export function useGoogleAuth() {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
-  const [accessToken, setAccessToken] = useState<string | null>(() => loadStoredToken()?.accessToken ?? null)
+  const initialStored = loadStoredToken()
+  const [accessToken, setAccessToken] = useState<string | null>(initialStored?.accessToken ?? null)
+  const [accountEmail, setAccountEmail] = useState<string | null>(initialStored?.email ?? null)
   const [gsiReady, setGsiReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const tokenClientRef = useRef<ReturnType<NonNullable<Window['google']>['accounts']['oauth2']['initTokenClient']> | null>(null)
@@ -63,10 +79,14 @@ export function useGoogleAuth() {
             setError(response.error ?? 'No se pudo obtener acceso a Google Calendar.')
             return
           }
+          const token = response.access_token
           const expiresAt = Date.now() + (response.expires_in ?? 3600) * 1000
-          localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ accessToken: response.access_token, expiresAt }))
           setError(null)
-          setAccessToken(response.access_token)
+          setAccessToken(token)
+          fetchAccountEmail(token).then((email) => {
+            localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ accessToken: token, expiresAt, email }))
+            setAccountEmail(email)
+          })
         },
       })
       setGsiReady(true)
@@ -93,7 +113,9 @@ export function useGoogleAuth() {
       setError('Google todavía no está listo, intenta de nuevo en un segundo.')
       return
     }
-    tokenClientRef.current.requestAccessToken({ prompt: interactive ? 'consent' : '' })
+    // select_account fuerza que Google siempre muestre el selector de cuenta, así se puede
+    // elegir explícitamente con cuál cuenta conectarse (no solo reusar la última activa).
+    tokenClientRef.current.requestAccessToken({ prompt: interactive ? 'select_account consent' : '' })
   }, [])
 
   const signOut = useCallback(() => {
@@ -102,12 +124,14 @@ export function useGoogleAuth() {
     }
     localStorage.removeItem(TOKEN_STORAGE_KEY)
     setAccessToken(null)
+    setAccountEmail(null)
   }, [accessToken])
 
   return {
     isConfigured: Boolean(clientId),
     gsiReady,
     accessToken,
+    accountEmail,
     isSignedIn: Boolean(accessToken),
     error,
     signIn,

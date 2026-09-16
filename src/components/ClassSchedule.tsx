@@ -1,10 +1,62 @@
-import { useState } from 'react'
-import { useLocalStorage } from '../hooks/useLocalStorage'
+import { useEffect, useRef, useState } from 'react'
 import type { ClassScheduleEntry, Weekday } from '../types'
 import { createRecurringClassEvent, deleteCalendarEvent } from '../utils/googleCalendarApi'
 
 interface Props {
   accessToken: string | null
+  accountEmail: string | null
+}
+
+const LEGACY_KEY = 'class-schedule'
+const MIGRATION_FLAG = 'class-schedule-migrated-to-account'
+
+function loadSchedule(key: string): ClassScheduleEntry[] {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? (JSON.parse(raw) as ClassScheduleEntry[]) : []
+  } catch {
+    return []
+  }
+}
+
+function saveSchedule(key: string, data: ClassScheduleEntry[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data))
+  } catch {
+    // localStorage lleno o no disponible; se ignora
+  }
+}
+
+/**
+ * Carga el horario de una cuenta. La primera vez que una cuenta pide su horario y no tiene
+ * nada guardado, hereda una única vez lo que hubiera en la clave vieja sin cuenta (de antes de
+ * que el horario se separara por cuenta), para no perder lo que ya estaba sincronizado.
+ */
+function loadForAccount(email: string | null): ClassScheduleEntry[] {
+  if (!email) {
+    const legacy = loadSchedule(LEGACY_KEY)
+    return legacy.length > 0 ? legacy : DEFAULT_SCHEDULE
+  }
+  const key = `${LEGACY_KEY}:${email}`
+  const existing = loadSchedule(key)
+  if (existing.length > 0) return existing
+  if (!localStorage.getItem(MIGRATION_FLAG)) {
+    const legacy = loadSchedule(LEGACY_KEY)
+    if (legacy.length > 0) {
+      saveSchedule(key, legacy)
+      try {
+        localStorage.setItem(MIGRATION_FLAG, '1')
+      } catch {
+        // se ignora
+      }
+      return legacy
+    }
+  }
+  return []
+}
+
+function storageKeyFor(email: string | null): string {
+  return email ? `${LEGACY_KEY}:${email}` : LEGACY_KEY
 }
 
 const DAY_LABELS: Record<Weekday, string> = {
@@ -85,8 +137,20 @@ const DEFAULT_SCHEDULE: ClassScheduleEntry[] = [
   },
 ]
 
-export function ClassSchedule({ accessToken }: Props) {
-  const [classes, setClasses] = useLocalStorage<ClassScheduleEntry[]>('class-schedule', DEFAULT_SCHEDULE)
+export function ClassSchedule({ accessToken, accountEmail }: Props) {
+  const [classes, setClasses] = useState<ClassScheduleEntry[]>(() => loadForAccount(accountEmail))
+  const prevEmailRef = useRef(accountEmail)
+
+  useEffect(() => {
+    if (prevEmailRef.current === accountEmail) return
+    prevEmailRef.current = accountEmail
+    setClasses(loadForAccount(accountEmail))
+  }, [accountEmail])
+
+  useEffect(() => {
+    saveSchedule(storageKeyFor(accountEmail), classes)
+  }, [accountEmail, classes])
+
   const [syncing, setSyncing] = useState(false)
   const [subject, setSubject] = useState('')
   const [day, setDay] = useState<Weekday>('MO')

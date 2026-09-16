@@ -1,12 +1,13 @@
 interface Props {
   isConfigured: boolean
   isSignedIn: boolean
+  accountEmail: string | null
   error: string | null
   onSignIn: () => void
   onSignOut: () => void
 }
 
-export function LoginButton({ isConfigured, isSignedIn, error, onSignIn, onSignOut }: Props) {
+export function LoginButton({ isConfigured, isSignedIn, accountEmail, error, onSignIn, onSignOut }: Props) {
   if (!isConfigured) {
     return (
       <div className="card warning">
@@ -21,9 +22,15 @@ export function LoginButton({ isConfigured, isSignedIn, error, onSignIn, onSignO
   return (
     <div className="login-bar">
       {isSignedIn ? (
-        <button className="btn secondary" onClick={onSignOut}>
-          Cerrar sesión de Google
-        </button>
+        <>
+          {accountEmail && <span className="muted">Conectado como {accountEmail}</span>}
+          <button className="btn secondary" onClick={onSignOut}>
+            Cerrar sesión de Google
+          </button>
+          <button className="btn ghost" onClick={onSignIn}>
+            Cambiar de cuenta
+          </button>
+        </>
       ) : (
         <button className="btn primary" onClick={onSignIn}>
           Conectar con Google Calendar

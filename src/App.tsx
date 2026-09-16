@@ -35,6 +35,7 @@ export default function App() {
       <LoginButton
         isConfigured={auth.isConfigured}
         isSignedIn={auth.isSignedIn}
+        accountEmail={auth.accountEmail}
         error={auth.error}
         onSignIn={() => auth.signIn(true)}
         onSignOut={auth.signOut}
@@ -79,7 +80,7 @@ export default function App() {
               </div>
             )
           )}
-          <ClassSchedule accessToken={auth.accessToken} />
+          <ClassSchedule accessToken={auth.accessToken} accountEmail={auth.accountEmail} />
         </div>
 
         <div className="column">
