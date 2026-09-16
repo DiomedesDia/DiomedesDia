@@ -8,6 +8,7 @@ import { EventsList } from './components/EventsList'
 import { AlarmBanner } from './components/AlarmBanner'
 import { StudyTimer } from './components/StudyTimer'
 import { DailyGoals } from './components/DailyGoals'
+import { ClassSchedule } from './components/ClassSchedule'
 import { requestNotificationPermission } from './utils/alarm'
 import type { ReminderOffset } from './types'
 
@@ -67,6 +68,7 @@ export default function App() {
               </div>
             )
           )}
+          <ClassSchedule accessToken={auth.accessToken} />
         </div>
 
         <div className="column">

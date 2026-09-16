@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import type { DailyGoal } from '../types'
 import { todayKey } from '../utils/formatDate'
-import { createGoalEvent, deleteGoalEvent, updateGoalEvent } from '../utils/googleCalendarApi'
+import { createGoalEvent, deleteCalendarEvent, updateGoalEvent } from '../utils/googleCalendarApi'
 
 interface Props {
   accessToken: string | null
@@ -50,7 +50,7 @@ export function DailyGoals({ accessToken }: Props) {
     const goal = goals.find((g) => g.id === id)
     setTodayGoals((prev) => prev.filter((g) => g.id !== id))
     if (accessToken && goal?.calendarEventId) {
-      deleteGoalEvent(accessToken, goal.calendarEventId)
+      deleteCalendarEvent(accessToken, goal.calendarEventId)
     }
   }
 

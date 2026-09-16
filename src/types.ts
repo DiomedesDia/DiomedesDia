@@ -29,3 +29,16 @@ export interface DailyGoal {
   /** id del evento en Google Calendar creado para este objetivo, si el usuario está conectado */
   calendarEventId?: string
 }
+
+export type Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU'
+
+export interface ClassScheduleEntry {
+  id: string
+  subject: string
+  day: Weekday
+  startTime: string
+  endTime: string
+  location?: string
+  /** id del evento recurrente en Google Calendar, si ya se sincronizó */
+  calendarEventId?: string
+}
