@@ -3,11 +3,14 @@ import { useGoogleAccounts } from './hooks/useGoogleAccounts'
 import { useCalendarEvents } from './hooks/useCalendarEvents'
 import { useReminders } from './hooks/useReminders'
 import { useLocalStorage } from './hooks/useLocalStorage'
+import { useClassSchedule } from './hooks/useClassSchedule'
+import { useAgentChat } from './hooks/useAgentChat'
 import { LoginButton } from './components/LoginButton'
 import { EventsList } from './components/EventsList'
 import { AlarmBanner } from './components/AlarmBanner'
 import { StudyTimer } from './components/StudyTimer'
 import { ClassSchedule } from './components/ClassSchedule'
+import { AgentChat } from './components/AgentChat'
 import { requestNotificationPermission } from './utils/alarm'
 import { createEvent, deleteCalendarEvent } from './utils/googleCalendarApi'
 import { eventKey } from './utils/eventKey'
@@ -19,6 +22,8 @@ export default function App() {
   const [offsetMinutes, setOffsetMinutes] = useLocalStorage<ReminderOffset>('reminder-offset', 15)
   const [overrides, setOverrides] = useLocalStorage<Record<string, boolean>>('reminder-overrides', {})
   const { reminders, firedAlarms, dismissAlarm } = useReminders(events, offsetMinutes, overrides)
+  const schedule = useClassSchedule(accounts)
+  const agent = useAgentChat({ accounts, events, schedule, refreshEvents: refresh })
 
   const isLinked = accounts.length > 0
 
@@ -88,7 +93,7 @@ export default function App() {
               </div>
             )
           )}
-          <ClassSchedule accounts={accounts} />
+          <ClassSchedule accounts={accounts} schedule={schedule} />
         </div>
 
         <div className="column">
@@ -103,6 +108,14 @@ export default function App() {
           dispositivo.
         </p>
       </footer>
+
+      <AgentChat
+        chatLog={agent.chatLog}
+        sendMessage={agent.sendMessage}
+        sending={agent.sending}
+        error={agent.error}
+        isConfigured={agent.isConfigured}
+      />
     </div>
   )
 }
