@@ -1,62 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import type { ClassScheduleEntry, Weekday } from '../types'
+import { useEffect, useState } from 'react'
+import { useLocalStorage } from '../hooks/useLocalStorage'
+import type { ClassScheduleEntry, LinkedAccount, Weekday } from '../types'
 import { createRecurringClassEvent, deleteCalendarEvent } from '../utils/googleCalendarApi'
 
 interface Props {
-  accessToken: string | null
-  accountEmail: string | null
-}
-
-const LEGACY_KEY = 'class-schedule'
-const MIGRATION_FLAG = 'class-schedule-migrated-to-account'
-
-function loadSchedule(key: string): ClassScheduleEntry[] {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as ClassScheduleEntry[]) : []
-  } catch {
-    return []
-  }
-}
-
-function saveSchedule(key: string, data: ClassScheduleEntry[]) {
-  try {
-    localStorage.setItem(key, JSON.stringify(data))
-  } catch {
-    // localStorage lleno o no disponible; se ignora
-  }
-}
-
-/**
- * Carga el horario de una cuenta. La primera vez que una cuenta pide su horario y no tiene
- * nada guardado, hereda una única vez lo que hubiera en la clave vieja sin cuenta (de antes de
- * que el horario se separara por cuenta), para no perder lo que ya estaba sincronizado.
- */
-function loadForAccount(email: string | null): ClassScheduleEntry[] {
-  if (!email) {
-    const legacy = loadSchedule(LEGACY_KEY)
-    return legacy.length > 0 ? legacy : DEFAULT_SCHEDULE
-  }
-  const key = `${LEGACY_KEY}:${email}`
-  const existing = loadSchedule(key)
-  if (existing.length > 0) return existing
-  if (!localStorage.getItem(MIGRATION_FLAG)) {
-    const legacy = loadSchedule(LEGACY_KEY)
-    if (legacy.length > 0) {
-      saveSchedule(key, legacy)
-      try {
-        localStorage.setItem(MIGRATION_FLAG, '1')
-      } catch {
-        // se ignora
-      }
-      return legacy
-    }
-  }
-  return []
-}
-
-function storageKeyFor(email: string | null): string {
-  return email ? `${LEGACY_KEY}:${email}` : LEGACY_KEY
+  accounts: LinkedAccount[]
 }
 
 const DAY_LABELS: Record<Weekday, string> = {
@@ -137,20 +85,13 @@ const DEFAULT_SCHEDULE: ClassScheduleEntry[] = [
   },
 ]
 
-export function ClassSchedule({ accessToken, accountEmail }: Props) {
-  const [classes, setClasses] = useState<ClassScheduleEntry[]>(() => loadForAccount(accountEmail))
-  const prevEmailRef = useRef(accountEmail)
+/** ¿A cuántas de las cuentas vinculadas les falta esta clase? */
+function missingAccounts(entry: ClassScheduleEntry, accounts: LinkedAccount[]): LinkedAccount[] {
+  return accounts.filter((a) => !entry.calendarEventIds?.[a.email])
+}
 
-  useEffect(() => {
-    if (prevEmailRef.current === accountEmail) return
-    prevEmailRef.current = accountEmail
-    setClasses(loadForAccount(accountEmail))
-  }, [accountEmail])
-
-  useEffect(() => {
-    saveSchedule(storageKeyFor(accountEmail), classes)
-  }, [accountEmail, classes])
-
+export function ClassSchedule({ accounts }: Props) {
+  const [classes, setClasses] = useLocalStorage<ClassScheduleEntry[]>('class-schedule', DEFAULT_SCHEDULE)
   const [syncing, setSyncing] = useState(false)
   const [subject, setSubject] = useState('')
   const [day, setDay] = useState<Weekday>('MO')
@@ -158,23 +99,54 @@ export function ClassSchedule({ accessToken, accountEmail }: Props) {
   const [endTime, setEndTime] = useState('09:00')
   const [location, setLocation] = useState('')
 
+  // Migra clases sincronizadas con versiones viejas de la app (un solo calendarEventId, de
+  // cuando todavía no existían varias cuentas vinculadas) al nuevo formato por cuenta,
+  // asumiendo que ese id le pertenece a la primera cuenta que se vincule de acá en más.
+  useEffect(() => {
+    if (accounts.length === 0) return
+    setClasses((prev) => {
+      let changed = false
+      const next = prev.map((c) => {
+        const legacyId = (c as unknown as { calendarEventId?: string }).calendarEventId
+        if (legacyId && !c.calendarEventIds) {
+          changed = true
+          const { calendarEventId: _legacy, ...rest } = c as unknown as { calendarEventId?: string } & ClassScheduleEntry
+          return { ...rest, calendarEventIds: { [accounts[0].email]: legacyId } }
+        }
+        return c
+      })
+      return changed ? next : prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts.length > 0])
+
   const sorted = [...classes].sort(
     (a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day) || a.startTime.localeCompare(b.startTime),
   )
-  const pendingCount = classes.filter((c) => !c.calendarEventId).length
+  const pendingCount = classes.filter((c) => missingAccounts(c, accounts).length > 0).length
 
   const syncOne = async (entry: ClassScheduleEntry) => {
-    if (!accessToken) return
-    const eventId = await createRecurringClassEvent(accessToken, entry)
-    if (eventId) {
-      setClasses((prev) => prev.map((c) => (c.id === entry.id ? { ...c, calendarEventId: eventId } : c)))
-    }
+    const pending = missingAccounts(entry, accounts)
+    if (pending.length === 0) return
+    const results = await Promise.all(
+      pending.map(async (account) => ({ email: account.email, eventId: await createRecurringClassEvent(account.accessToken, entry) })),
+    )
+    setClasses((prev) =>
+      prev.map((c) => {
+        if (c.id !== entry.id) return c
+        const nextIds = { ...c.calendarEventIds }
+        for (const { email, eventId } of results) {
+          if (eventId) nextIds[email] = eventId
+        }
+        return { ...c, calendarEventIds: nextIds }
+      }),
+    )
   }
 
   const syncAll = async () => {
-    if (!accessToken) return
+    if (accounts.length === 0) return
     setSyncing(true)
-    for (const entry of classes.filter((c) => !c.calendarEventId)) {
+    for (const entry of classes.filter((c) => missingAccounts(c, accounts).length > 0)) {
       await syncOne(entry)
     }
     setSyncing(false)
@@ -194,14 +166,17 @@ export function ClassSchedule({ accessToken, accountEmail }: Props) {
     setClasses((prev) => [...prev, entry])
     setSubject('')
     setLocation('')
-    if (accessToken) syncOne(entry)
+    if (accounts.length > 0) syncOne(entry)
   }
 
   const removeClass = (id: string) => {
     const entry = classes.find((c) => c.id === id)
     setClasses((prev) => prev.filter((c) => c.id !== id))
-    if (accessToken && entry?.calendarEventId) {
-      deleteCalendarEvent(accessToken, entry.calendarEventId)
+    if (entry?.calendarEventIds) {
+      for (const account of accounts) {
+        const eventId = entry.calendarEventIds[account.email]
+        if (eventId) deleteCalendarEvent(account.accessToken, eventId)
+      }
     }
   }
 
@@ -209,7 +184,7 @@ export function ClassSchedule({ accessToken, accountEmail }: Props) {
     <section className="card">
       <div className="card-header">
         <h2>Horario semanal</h2>
-        {accessToken && pendingCount > 0 && (
+        {accounts.length > 0 && pendingCount > 0 && (
           <button className="btn ghost" onClick={syncAll} disabled={syncing}>
             {syncing ? 'Sincronizando…' : `Sincronizar (${pendingCount})`}
           </button>
@@ -248,33 +223,41 @@ export function ClassSchedule({ accessToken, accountEmail }: Props) {
       </form>
 
       <ul className="class-list">
-        {sorted.map((c) => (
-          <li key={c.id} className="class-item">
-            <div>
-              <p className="event-title">{c.subject}</p>
-              <p className="event-time">
-                {DAY_LABELS[c.day]} · {c.startTime}–{c.endTime}
-                {c.location ? ` · ${c.location}` : ''}
-              </p>
-            </div>
-            <div className="class-item-actions">
-              {c.calendarEventId ? (
-                <span title="Sincronizado con Google Calendar">📅</span>
-              ) : (
-                accessToken && <span className="muted">sin sincronizar</span>
-              )}
-              <button className="icon-btn" onClick={() => removeClass(c.id)} aria-label="Eliminar clase">
-                ✕
-              </button>
-            </div>
-          </li>
-        ))}
+        {sorted.map((c) => {
+          const missing = missingAccounts(c, accounts)
+          const syncedCount = accounts.length - missing.length
+          return (
+            <li key={c.id} className="class-item">
+              <div>
+                <p className="event-title">{c.subject}</p>
+                <p className="event-time">
+                  {DAY_LABELS[c.day]} · {c.startTime}–{c.endTime}
+                  {c.location ? ` · ${c.location}` : ''}
+                </p>
+              </div>
+              <div className="class-item-actions">
+                {accounts.length === 0 ? null : syncedCount === 0 ? (
+                  <span className="muted">sin sincronizar</span>
+                ) : missing.length > 0 ? (
+                  <span title="Falta sincronizar con alguna cuenta">
+                    📅 {syncedCount}/{accounts.length}
+                  </span>
+                ) : (
+                  <span title="Sincronizado con todas tus cuentas vinculadas">📅</span>
+                )}
+                <button className="icon-btn" onClick={() => removeClass(c.id)} aria-label="Eliminar clase">
+                  ✕
+                </button>
+              </div>
+            </li>
+          )
+        })}
       </ul>
 
-      {!accessToken && (
+      {accounts.length === 0 && (
         <p className="muted small-note">
-          Conectá tu Google Calendar arriba y tocá "Sincronizar" para que estas clases se repitan cada semana en tu
-          calendario.
+          Vinculá al menos una cuenta de Google arriba y tocá "Sincronizar" para que estas clases se repitan cada semana en
+          tu calendario.
         </p>
       )}
     </section>

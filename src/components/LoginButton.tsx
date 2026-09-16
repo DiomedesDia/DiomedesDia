@@ -1,13 +1,15 @@
+import type { LinkedAccount } from '../types'
+
 interface Props {
   isConfigured: boolean
-  isSignedIn: boolean
-  accountEmail: string | null
+  accounts: LinkedAccount[]
+  linking: boolean
   error: string | null
-  onSignIn: () => void
-  onSignOut: () => void
+  onLink: () => void
+  onUnlink: (email: string) => void
 }
 
-export function LoginButton({ isConfigured, isSignedIn, accountEmail, error, onSignIn, onSignOut }: Props) {
+export function LoginButton({ isConfigured, accounts, linking, error, onLink, onUnlink }: Props) {
   if (!isConfigured) {
     return (
       <div className="card warning">
@@ -21,21 +23,21 @@ export function LoginButton({ isConfigured, isSignedIn, accountEmail, error, onS
 
   return (
     <div className="login-bar">
-      {isSignedIn ? (
-        <>
-          {accountEmail && <span className="muted">Conectado como {accountEmail}</span>}
-          <button className="btn secondary" onClick={onSignOut}>
-            Cerrar sesión de Google
-          </button>
-          <button className="btn ghost" onClick={onSignIn}>
-            Cambiar de cuenta
-          </button>
-        </>
-      ) : (
-        <button className="btn primary" onClick={onSignIn}>
-          Conectar con Google Calendar
-        </button>
+      {accounts.length > 0 && (
+        <ul className="account-list">
+          {accounts.map((account) => (
+            <li key={account.email}>
+              <span>{account.email}</span>
+              <button className="icon-btn" onClick={() => onUnlink(account.email)} aria-label={`Desvincular ${account.email}`}>
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
+      <button className="btn primary" onClick={onLink} disabled={linking}>
+        {linking ? 'Conectando…' : accounts.length > 0 ? 'Vincular otra cuenta' : 'Conectar con Google Calendar'}
+      </button>
       {error && <p className="error-text">{error}</p>}
     </div>
   )

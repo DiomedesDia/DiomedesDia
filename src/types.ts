@@ -5,6 +5,14 @@ export interface CalendarEvent {
   end: Date
   isAllDay: boolean
   htmlLink?: string
+  /** cuenta de Google vinculada dueña de este evento */
+  accountEmail: string
+}
+
+export interface LinkedAccount {
+  email: string
+  accessToken: string
+  expiresAt: number
 }
 
 export type ReminderOffset = 0 | 5 | 10 | 15 | 30 | 60 | 120
@@ -31,6 +39,6 @@ export interface ClassScheduleEntry {
   startTime: string
   endTime: string
   location?: string
-  /** id del evento recurrente en Google Calendar, si ya se sincronizó */
-  calendarEventId?: string
+  /** id del evento recurrente en Google Calendar por cada cuenta vinculada donde ya se sincronizó */
+  calendarEventIds?: Record<string, string>
 }

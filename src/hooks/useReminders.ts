@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CalendarEvent, ReminderOffset } from '../types'
 import { looksLikeStudyEvent } from '../utils/studyKeywords'
 import { playAlarmSound, showAlarmNotification } from '../utils/alarm'
+import { eventKey } from '../utils/eventKey'
 
 export interface ReminderEntry {
   event: CalendarEvent
@@ -9,7 +10,7 @@ export interface ReminderEntry {
 }
 
 export interface FiredAlarm {
-  eventId: string
+  key: string
   summary: string
 }
 
@@ -23,7 +24,7 @@ export function useReminders(events: CalendarEvent[], offsetMinutes: ReminderOff
 
   const reminders: ReminderEntry[] = events.map((event) => ({
     event,
-    enabled: overrides[event.id] ?? looksLikeStudyEvent(event.summary),
+    enabled: overrides[eventKey(event)] ?? looksLikeStudyEvent(event.summary),
   }))
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export function useReminders(events: CalendarEvent[], offsetMinutes: ReminderOff
         const id = window.setTimeout(() => {
           playAlarmSound()
           showAlarmNotification('⏰ Hora de estudiar', event.summary)
-          setFiredAlarms((prev) => [...prev, { eventId: event.id, summary: event.summary }])
+          setFiredAlarms((prev) => [...prev, { key: eventKey(event), summary: event.summary }])
         }, delay)
         timeoutsRef.current.push(id)
       })
@@ -51,8 +52,8 @@ export function useReminders(events: CalendarEvent[], offsetMinutes: ReminderOff
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events, offsetMinutes, overrides])
 
-  const dismissAlarm = (eventId: string) => {
-    setFiredAlarms((prev) => prev.filter((a) => a.eventId !== eventId))
+  const dismissAlarm = (key: string) => {
+    setFiredAlarms((prev) => prev.filter((a) => a.key !== key))
   }
 
   return { reminders, firedAlarms, dismissAlarm }

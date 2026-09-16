@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import type { ReminderEntry } from '../hooks/useReminders'
-import type { ReminderOffset } from '../types'
+import type { CalendarEvent, ReminderOffset } from '../types'
 import { formatEventTime, todayKey } from '../utils/formatDate'
 import { GOAL_PREFIX } from '../utils/googleCalendarApi'
+import { eventKey } from '../utils/eventKey'
 
 const OFFSET_OPTIONS: ReminderOffset[] = [0, 5, 10, 15, 30, 60, 120]
 
@@ -18,11 +19,12 @@ interface Props {
   error: string | null
   offsetMinutes: ReminderOffset
   onOffsetChange: (value: ReminderOffset) => void
-  onToggleReminder: (eventId: string, enabled: boolean) => void
+  onToggleReminder: (key: string, enabled: boolean) => void
   onToggleSeries: (summary: string, enabled: boolean) => void
   onRefresh: () => void
   onAddGoal: (input: NewEventInput) => Promise<void>
-  onDeleteEvent: (eventId: string) => Promise<void>
+  onDeleteEvent: (event: CalendarEvent) => Promise<void>
+  showAccountLabel: boolean
 }
 
 export function EventsList({
@@ -36,6 +38,7 @@ export function EventsList({
   onRefresh,
   onAddGoal,
   onDeleteEvent,
+  showAccountLabel,
 }: Props) {
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(todayKey())
@@ -83,7 +86,11 @@ export function EventsList({
             {adding ? 'Agregando…' : 'Agregar'}
           </button>
         </div>
-        <p className="muted small-note">Dejá la hora vacía para que quede como evento de todo el día.</p>
+        <p className="muted small-note">
+          {showAccountLabel
+            ? 'Se crea en el calendario de todas tus cuentas vinculadas. Dejá la hora vacía para "todo el día".'
+            : 'Dejá la hora vacía para que quede como evento de todo el día.'}
+        </p>
       </form>
 
       <label className="offset-picker">
@@ -102,6 +109,7 @@ export function EventsList({
 
       <ul className="events-list">
         {reminders.map(({ event, enabled }) => {
+          const key = eventKey(event)
           const groupCount = summaryCounts.get(event.summary) ?? 1
           const showGroupButton = groupCount > 1 && !shownGroupButton.has(event.summary)
           if (showGroupButton) shownGroupButton.add(event.summary)
@@ -109,16 +117,15 @@ export function EventsList({
           const isGoal = event.summary.startsWith(GOAL_PREFIX)
 
           return (
-            <li key={event.id} className={enabled ? 'event-item active' : 'event-item'}>
+            <li key={key} className={enabled ? 'event-item active' : 'event-item'}>
               <label className="event-toggle">
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  onChange={(e) => onToggleReminder(event.id, e.target.checked)}
-                />
+                <input type="checkbox" checked={enabled} onChange={(e) => onToggleReminder(key, e.target.checked)} />
                 <div>
                   <p className="event-title">{event.summary}</p>
-                  <p className="event-time">{formatEventTime(event.start, event.isAllDay)}</p>
+                  <p className="event-time">
+                    {formatEventTime(event.start, event.isAllDay)}
+                    {showAccountLabel && <span className="account-tag"> · {event.accountEmail}</span>}
+                  </p>
                   {showGroupButton && (
                     <button
                       className="link-btn"
@@ -137,7 +144,7 @@ export function EventsList({
               <div className="event-actions">
                 {enabled && <span className="badge">🔔 recordatorio activo</span>}
                 {isGoal && (
-                  <button className="icon-btn" onClick={() => onDeleteEvent(event.id)} aria-label="Eliminar evento">
+                  <button className="icon-btn" onClick={() => onDeleteEvent(event)} aria-label="Eliminar evento">
                     ✕
                   </button>
                 )}
