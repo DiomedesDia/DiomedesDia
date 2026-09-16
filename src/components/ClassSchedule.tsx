@@ -224,6 +224,23 @@ export function ClassSchedule({ accounts }: Props) {
     if (accounts.length > 0) syncOne(entry)
   }
 
+  /**
+   * Olvida qué clases ya estaban sincronizadas (sin borrar nada en Google Calendar), para
+   * recuperarse de un horario que quedó desincronizado con la realidad (por ejemplo, después de
+   * borrar eventos duplicados a mano). Un "Sincronizar" posterior las vuelve a crear limpias.
+   */
+  const resyncAll = () => {
+    const confirmed = window.confirm(
+      'Esto hace que la app "olvide" qué clases ya estaban sincronizadas (no borra nada en tu Google Calendar). ' +
+        'Usalo después de borrar a mano los eventos duplicados o viejos en Google Calendar, y después tocá ' +
+        '"Sincronizar" para volver a crearlos limpios. ¿Continuar?',
+    )
+    if (!confirmed) return
+    setClasses((prev) => prev.map((c) => ({ ...c, calendarEventIds: {} })))
+  }
+
+  const hasSyncedSomething = classes.some((c) => Object.keys(c.calendarEventIds ?? {}).length > 0)
+
   const removeClass = (id: string) => {
     const entry = classes.find((c) => c.id === id)
     setClasses((prev) => prev.filter((c) => c.id !== id))
@@ -246,6 +263,13 @@ export function ClassSchedule({ accounts }: Props) {
           </button>
         )}
       </div>
+
+      {accounts.length > 0 && hasSyncedSomething && (
+        <button className="link-btn resync-all" onClick={resyncAll}>
+          ¿Tu horario quedó duplicado o desincronizado en Google Calendar? Borrá los eventos de más a mano ahí y tocá acá
+          para resincronizar todo desde cero.
+        </button>
+      )}
 
       <form className="class-form" onSubmit={submitForm}>
         <input

@@ -260,6 +260,13 @@ body {
   text-decoration: underline;
 }
 
+.resync-all {
+  display: block;
+  margin-bottom: 16px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .small-note {
   margin-top: 12px;
   font-size: 0.8rem;
