@@ -11,10 +11,24 @@ interface Props {
   offsetMinutes: ReminderOffset
   onOffsetChange: (value: ReminderOffset) => void
   onToggleReminder: (eventId: string, enabled: boolean) => void
+  onToggleSeries: (summary: string, enabled: boolean) => void
   onRefresh: () => void
 }
 
-export function EventsList({ reminders, loading, error, offsetMinutes, onOffsetChange, onToggleReminder, onRefresh }: Props) {
+export function EventsList({
+  reminders,
+  loading,
+  error,
+  offsetMinutes,
+  onOffsetChange,
+  onToggleReminder,
+  onToggleSeries,
+  onRefresh,
+}: Props) {
+  const summaryCounts = new Map<string, number>()
+  reminders.forEach(({ event }) => summaryCounts.set(event.summary, (summaryCounts.get(event.summary) ?? 0) + 1))
+  const shownGroupButton = new Set<string>()
+
   return (
     <section className="card">
       <div className="card-header">
@@ -39,22 +53,42 @@ export function EventsList({ reminders, loading, error, offsetMinutes, onOffsetC
       {!error && reminders.length === 0 && !loading && <p className="muted">No hay eventos próximos en tu calendario.</p>}
 
       <ul className="events-list">
-        {reminders.map(({ event, enabled }) => (
-          <li key={event.id} className={enabled ? 'event-item active' : 'event-item'}>
-            <label className="event-toggle">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(e) => onToggleReminder(event.id, e.target.checked)}
-              />
-              <div>
-                <p className="event-title">{event.summary}</p>
-                <p className="event-time">{formatEventTime(event.start, event.isAllDay)}</p>
-              </div>
-            </label>
-            {enabled && <span className="badge">🔔 recordatorio activo</span>}
-          </li>
-        ))}
+        {reminders.map(({ event, enabled }) => {
+          const groupCount = summaryCounts.get(event.summary) ?? 1
+          const showGroupButton = groupCount > 1 && !shownGroupButton.has(event.summary)
+          if (showGroupButton) shownGroupButton.add(event.summary)
+          const groupAllEnabled = reminders.filter((r) => r.event.summary === event.summary).every((r) => r.enabled)
+
+          return (
+            <li key={event.id} className={enabled ? 'event-item active' : 'event-item'}>
+              <label className="event-toggle">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(e) => onToggleReminder(event.id, e.target.checked)}
+                />
+                <div>
+                  <p className="event-title">{event.summary}</p>
+                  <p className="event-time">{formatEventTime(event.start, event.isAllDay)}</p>
+                  {showGroupButton && (
+                    <button
+                      className="link-btn"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        onToggleSeries(event.summary, !groupAllEnabled)
+                      }}
+                    >
+                      {groupAllEnabled
+                        ? `🔇 silenciar las ${groupCount} repeticiones de "${event.summary}"`
+                        : `🔔 activar las ${groupCount} repeticiones de "${event.summary}"`}
+                    </button>
+                  )}
+                </div>
+              </label>
+              {enabled && <span className="badge">🔔 recordatorio activo</span>}
+            </li>
+          )
+        })}
       </ul>
     </section>
   )

@@ -49,6 +49,15 @@ export default function App() {
               offsetMinutes={offsetMinutes}
               onOffsetChange={setOffsetMinutes}
               onToggleReminder={(eventId, enabled) => setOverrides((prev) => ({ ...prev, [eventId]: enabled }))}
+              onToggleSeries={(summary, enabled) =>
+                setOverrides((prev) => {
+                  const next = { ...prev }
+                  events.filter((e) => e.summary === summary).forEach((e) => {
+                    next[e.id] = enabled
+                  })
+                  return next
+                })
+              }
               onRefresh={refresh}
             />
           ) : (
