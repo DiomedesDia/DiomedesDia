@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import type { ClassScheduleEntry, LinkedAccount, Weekday } from '../types'
-import { createRecurringClassEvent, deleteCalendarEvent } from '../utils/googleCalendarApi'
+import { createRecurringClassEvent, deleteCalendarEvent, updateRecurringClassEvent } from '../utils/googleCalendarApi'
 
 interface Props {
   accounts: LinkedAccount[]
@@ -93,6 +93,8 @@ function missingAccounts(entry: ClassScheduleEntry, accounts: LinkedAccount[]): 
 export function ClassSchedule({ accounts }: Props) {
   const [classes, setClasses] = useLocalStorage<ClassScheduleEntry[]>('class-schedule', DEFAULT_SCHEDULE)
   const [syncing, setSyncing] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   const [subject, setSubject] = useState('')
   const [day, setDay] = useState<Weekday>('MO')
   const [startTime, setStartTime] = useState('08:00')
@@ -152,9 +154,63 @@ export function ClassSchedule({ accounts }: Props) {
     setSyncing(false)
   }
 
-  const addClass = (e: React.FormEvent) => {
+  const resetForm = () => {
+    setSubject('')
+    setDay('MO')
+    setStartTime('08:00')
+    setEndTime('09:00')
+    setLocation('')
+  }
+
+  const startEdit = (entry: ClassScheduleEntry) => {
+    setEditingId(entry.id)
+    setSubject(entry.subject)
+    setDay(entry.day)
+    setStartTime(entry.startTime)
+    setEndTime(entry.endTime)
+    setLocation(entry.location ?? '')
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    resetForm()
+  }
+
+  const saveEdit = async (id: string) => {
+    const updated: ClassScheduleEntry = {
+      id,
+      subject: subject.trim(),
+      day,
+      startTime,
+      endTime,
+      location: location.trim() || undefined,
+      calendarEventIds: classes.find((c) => c.id === id)?.calendarEventIds,
+    }
+    setClasses((prev) => prev.map((c) => (c.id === id ? updated : c)))
+    setEditingId(null)
+    resetForm()
+
+    const syncedEmails = Object.keys(updated.calendarEventIds ?? {})
+    if (syncedEmails.length === 0) return
+    setSavingEdit(true)
+    await Promise.all(
+      syncedEmails.map((email) => {
+        const account = accounts.find((a) => a.email === email)
+        const eventId = updated.calendarEventIds?.[email]
+        if (!account || !eventId) return Promise.resolve()
+        return updateRecurringClassEvent(account.accessToken, eventId, updated)
+      }),
+    )
+    setSavingEdit(false)
+  }
+
+  const submitForm = (e: React.FormEvent) => {
     e.preventDefault()
     if (!subject.trim()) return
+    if (editingId) {
+      saveEdit(editingId)
+      return
+    }
     const entry: ClassScheduleEntry = {
       id: crypto.randomUUID(),
       subject: subject.trim(),
@@ -164,8 +220,7 @@ export function ClassSchedule({ accounts }: Props) {
       location: location.trim() || undefined,
     }
     setClasses((prev) => [...prev, entry])
-    setSubject('')
-    setLocation('')
+    resetForm()
     if (accounts.length > 0) syncOne(entry)
   }
 
@@ -178,6 +233,7 @@ export function ClassSchedule({ accounts }: Props) {
         if (eventId) deleteCalendarEvent(account.accessToken, eventId)
       }
     }
+    if (editingId === id) cancelEdit()
   }
 
   return (
@@ -191,7 +247,7 @@ export function ClassSchedule({ accounts }: Props) {
         )}
       </div>
 
-      <form className="class-form" onSubmit={addClass}>
+      <form className="class-form" onSubmit={submitForm}>
         <input
           className="text-input"
           type="text"
@@ -217,9 +273,16 @@ export function ClassSchedule({ accounts }: Props) {
           value={location}
           onChange={(e) => setLocation(e.target.value)}
         />
-        <button className="btn primary" type="submit">
-          Agregar clase
-        </button>
+        <div className="class-form-row">
+          <button className="btn primary" type="submit" disabled={savingEdit}>
+            {editingId ? (savingEdit ? 'Guardando…' : 'Guardar cambios') : 'Agregar clase'}
+          </button>
+          {editingId && (
+            <button className="btn ghost" type="button" onClick={cancelEdit}>
+              Cancelar
+            </button>
+          )}
+        </div>
       </form>
 
       <ul className="class-list">
@@ -227,7 +290,7 @@ export function ClassSchedule({ accounts }: Props) {
           const missing = missingAccounts(c, accounts)
           const syncedCount = accounts.length - missing.length
           return (
-            <li key={c.id} className="class-item">
+            <li key={c.id} className={c.id === editingId ? 'class-item editing' : 'class-item'}>
               <div>
                 <p className="event-title">{c.subject}</p>
                 <p className="event-time">
@@ -245,6 +308,9 @@ export function ClassSchedule({ accounts }: Props) {
                 ) : (
                   <span title="Sincronizado con todas tus cuentas vinculadas">📅</span>
                 )}
+                <button className="icon-btn" onClick={() => startEdit(c)} aria-label="Editar clase">
+                  ✎
+                </button>
                 <button className="icon-btn" onClick={() => removeClass(c.id)} aria-label="Eliminar clase">
                   ✕
                 </button>

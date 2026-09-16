@@ -313,6 +313,10 @@ body {
   white-space: nowrap;
 }
 
+.class-item.editing {
+  outline: 1px solid var(--primary);
+}
+
 .text-input {
   width: 100%;
   padding: 10px 12px;

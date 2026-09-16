@@ -103,26 +103,48 @@ interface ClassEventInput {
   location?: string
 }
 
+function recurringClassEventBody(entry: ClassEventInput) {
+  const date = nextDateForWeekday(entry.day)
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  return {
+    summary: entry.subject,
+    location: entry.location,
+    start: { dateTime: toRfc3339Local(combineLocal(date, entry.startTime)), timeZone },
+    end: { dateTime: toRfc3339Local(combineLocal(date, entry.endTime)), timeZone },
+    recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${entry.day}`],
+  }
+}
+
 /** Crea un evento que se repite cada semana el mismo día/horario (para el horario de clases). */
 export async function createRecurringClassEvent(accessToken: string, entry: ClassEventInput): Promise<string | null> {
   try {
-    const date = nextDateForWeekday(entry.day)
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
     const res = await fetch(EVENTS_BASE, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        summary: entry.subject,
-        location: entry.location,
-        start: { dateTime: toRfc3339Local(combineLocal(date, entry.startTime)), timeZone },
-        end: { dateTime: toRfc3339Local(combineLocal(date, entry.endTime)), timeZone },
-        recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${entry.day}`],
-      }),
+      body: JSON.stringify(recurringClassEventBody(entry)),
     })
     if (!res.ok) return null
     const data = (await res.json()) as { id?: string }
     return data.id ?? null
   } catch {
     return null
+  }
+}
+
+/**
+ * Actualiza un evento recurrente de clase ya sincronizado (materia, día, horario o lugar).
+ * Reemplaza el día/hora de todas las repeticiones futuras, así sirve tanto para corregir un
+ * dato como para mover la clase a otro horario de forma permanente.
+ */
+export async function updateRecurringClassEvent(accessToken: string, eventId: string, entry: ClassEventInput): Promise<boolean> {
+  try {
+    const res = await fetch(`${EVENTS_BASE}/${eventId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(recurringClassEventBody(entry)),
+    })
+    return res.ok
+  } catch {
+    return false
   }
 }
