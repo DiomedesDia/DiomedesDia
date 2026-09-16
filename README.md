@@ -4,12 +4,12 @@ Aplicación web que se conecta a **tu Google Calendar** para ayudarte a organiza
 
 - 🔔 **Recordatorios con alarma**: detecta eventos que suenan a "estudiar", "parcial", "examen", etc. (o los marcás vos manualmente) y te avisa con sonido + notificación del navegador X minutos antes.
 - ⏱️ **Cronómetro de estudio**: cronómetro por materia/tema, con historial del día guardado en tu dispositivo.
-- ✅ **Objetivos diarios**: se agregan directo desde la lista de eventos y quedan mezclados ahí, como un evento más de hoy (con el ícono 🎯) en vez de una lista aparte.
+- ✅ **Objetivos y eventos puntuales**: agregá desde la misma lista un objetivo del día, un parcial o una entrega de proyecto en cualquier fecha futura, con hora opcional. Quedan mezclados ahí como uno más (con el ícono 📌), en vez de una lista aparte.
 - 🗓️ **Horario semanal**: cargá tus clases (materia, día, hora, lugar/profesor) y sincronizalas como eventos recurrentes semanales en tu Google Calendar con un clic.
 
-Es una app 100% de cliente (React + Vite): no hay backend ni base de datos, tus datos de cronómetro quedan guardados en el `localStorage` de tu navegador; los objetivos y el horario viven directamente en tu Google Calendar. La app puede **leer, crear, editar y borrar eventos** en tu Google Calendar (permiso `calendar.events`); no toca la configuración de tus calendarios ni nada fuera de eventos.
+Es una app 100% de cliente (React + Vite): no hay backend ni base de datos, tus datos de cronómetro quedan guardados en el `localStorage` de tu navegador; los objetivos, parciales/entregas y el horario viven directamente en tu Google Calendar. La app puede **leer, crear, editar y borrar eventos** en tu Google Calendar (permiso `calendar.events`); no toca la configuración de tus calendarios ni nada fuera de eventos.
 
-> Cada objetivo diario que agregás crea un evento de un solo día (hoy), no recurrente — así que solo va quedando dentro de la semana en la que lo fuiste anotando, sin acumular eventos futuros. Aparece mezclado en "Próximos eventos" con el ícono 🎯; borrarlo desde ahí (✕) borra también el evento real en tu calendario.
+> Cada evento que agregás así (objetivo, parcial, entrega…) queda en la fecha que elijas, con hora si la pusiste o como "todo el día" si la dejaste vacía. Aparece mezclado en "Próximos eventos" con el ícono 📌; borrarlo desde ahí (✕) borra también el evento real en tu calendario.
 
 > ⚠️ Los recordatorios se agendan con temporizadores del navegador, así que solo suenan **mientras la pestaña esté abierta**. No hay notificaciones push en segundo plano (eso requeriría un backend con Google Calendar Push Notifications, que no está incluido en esta versión).
 
@@ -45,7 +45,7 @@ Abrí `http://localhost:5173`, hacé clic en **"Conectar con Google Calendar"** 
 
 - **Recordatorios**: en la lista de eventos, cada evento tiene un checkbox. Los que parecen de estudio (examen, parcial, tarea…) ya vienen tildados; podés activar/desactivar cualquiera a mano. Elegí con cuánta anticipación querés el aviso (justo a la hora, 15 min antes, 1 hora antes, etc.).
 - **Cronómetro**: escribí qué estás estudiando, iniciá el cronómetro, pausalo cuando quieras y "Terminar y guardar" para registrar la sesión. Vas a ver el total de horas estudiadas hoy y el detalle por sesión.
-- **Objetivos diarios**: arriba de la lista de eventos hay un campo "Objetivo de hoy" — escribí la meta y tocá "Agregar": se crea un evento de hoy en tu Google Calendar y aparece al toque mezclado con el resto de tus eventos (con el ícono 🎯). Podés activarle recordatorio como a cualquier otro evento, y borrarlo con el ✕ que solo aparece en los objetivos que creó la app.
+- **Objetivos y eventos puntuales**: arriba de la lista de eventos hay un formulario con título, fecha y hora (opcional). Dejá la hora vacía para un objetivo o entrega de "todo el día", o cargala para un parcial a una hora exacta. Al tocar "Agregar" se crea el evento en tu Google Calendar (en la fecha que elegiste, no solo hoy) y aparece al toque mezclado con el resto de tus eventos (con el ícono 📌). Podés activarle recordatorio como a cualquier otro evento, y borrarlo con el ✕ que solo aparece en los que creó la app.
 - **Horario semanal**: la sección viene precargada con un horario de ejemplo (podés borrarlo y cargar el tuyo con el formulario: materia, día, hora de inicio/fin y lugar u profesor opcional). Con "Agregar clase" se guarda localmente; para que además cree el evento recurrente en Google Calendar necesitás estar conectado — si agregaste clases antes de conectarte, tocá el botón **"Sincronizar (N)"** que aparece arriba de la lista para crearlas todas de una. Cada clase se guarda como un evento que se repite todas las semanas el mismo día y horario; borrar la clase en la app borra también el evento (y todas sus repeticiones futuras) en el calendario.
 
 ### Si ya habías conectado la app antes

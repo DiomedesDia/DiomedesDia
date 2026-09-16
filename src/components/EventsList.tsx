@@ -1,10 +1,16 @@
 import { useState } from 'react'
 import type { ReminderEntry } from '../hooks/useReminders'
 import type { ReminderOffset } from '../types'
-import { formatEventTime } from '../utils/formatDate'
+import { formatEventTime, todayKey } from '../utils/formatDate'
 import { GOAL_PREFIX } from '../utils/googleCalendarApi'
 
 const OFFSET_OPTIONS: ReminderOffset[] = [0, 5, 10, 15, 30, 60, 120]
+
+export interface NewEventInput {
+  text: string
+  date: string
+  time?: string
+}
 
 interface Props {
   reminders: ReminderEntry[]
@@ -15,7 +21,7 @@ interface Props {
   onToggleReminder: (eventId: string, enabled: boolean) => void
   onToggleSeries: (summary: string, enabled: boolean) => void
   onRefresh: () => void
-  onAddGoal: (text: string) => Promise<void>
+  onAddGoal: (input: NewEventInput) => Promise<void>
   onDeleteEvent: (eventId: string) => Promise<void>
 }
 
@@ -31,7 +37,9 @@ export function EventsList({
   onAddGoal,
   onDeleteEvent,
 }: Props) {
-  const [draft, setDraft] = useState('')
+  const [title, setTitle] = useState('')
+  const [date, setDate] = useState(todayKey())
+  const [time, setTime] = useState('')
   const [adding, setAdding] = useState(false)
 
   const summaryCounts = new Map<string, number>()
@@ -40,12 +48,14 @@ export function EventsList({
 
   const submitGoal = async (e: React.FormEvent) => {
     e.preventDefault()
-    const text = draft.trim()
-    if (!text) return
+    const text = title.trim()
+    if (!text || !date) return
     setAdding(true)
-    await onAddGoal(text)
+    await onAddGoal({ text, date, time: time || undefined })
     setAdding(false)
-    setDraft('')
+    setTitle('')
+    setTime('')
+    setDate(todayKey())
   }
 
   return (
@@ -57,18 +67,23 @@ export function EventsList({
         </button>
       </div>
 
-      <form className="goal-form" onSubmit={submitGoal}>
+      <form className="add-event-form" onSubmit={submitGoal}>
         <input
           className="text-input"
           type="text"
-          placeholder="Objetivo de hoy (ej. estudiar para el parcial)"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Título (ej. Entrega de proyecto, parcial de Cálculo, estudiar para el examen…)"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
           disabled={adding}
         />
-        <button className="btn primary" type="submit" disabled={adding}>
-          {adding ? 'Agregando…' : 'Agregar'}
-        </button>
+        <div className="add-event-row">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={adding} />
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={adding} />
+          <button className="btn primary" type="submit" disabled={adding}>
+            {adding ? 'Agregando…' : 'Agregar'}
+          </button>
+        </div>
+        <p className="muted small-note">Dejá la hora vacía para que quede como evento de todo el día.</p>
       </form>
 
       <label className="offset-picker">
@@ -122,7 +137,7 @@ export function EventsList({
               <div className="event-actions">
                 {enabled && <span className="badge">🔔 recordatorio activo</span>}
                 {isGoal && (
-                  <button className="icon-btn" onClick={() => onDeleteEvent(event.id)} aria-label="Eliminar objetivo">
+                  <button className="icon-btn" onClick={() => onDeleteEvent(event.id)} aria-label="Eliminar evento">
                     ✕
                   </button>
                 )}

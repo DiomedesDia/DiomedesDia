@@ -9,7 +9,7 @@ import { AlarmBanner } from './components/AlarmBanner'
 import { StudyTimer } from './components/StudyTimer'
 import { ClassSchedule } from './components/ClassSchedule'
 import { requestNotificationPermission } from './utils/alarm'
-import { createGoalEvent, deleteCalendarEvent } from './utils/googleCalendarApi'
+import { createEvent, deleteCalendarEvent } from './utils/googleCalendarApi'
 import type { ReminderOffset } from './types'
 
 export default function App() {
@@ -60,9 +60,10 @@ export default function App() {
                 })
               }
               onRefresh={refresh}
-              onAddGoal={async (text) => {
+              onAddGoal={async ({ text, date, time }) => {
                 if (!auth.accessToken) return
-                await createGoalEvent(auth.accessToken, text, new Date())
+                const [y, m, d] = date.split('-').map(Number)
+                await createEvent(auth.accessToken, { summary: text, date: new Date(y, m - 1, d), time })
                 await refresh()
               }}
               onDeleteEvent={async (eventId) => {

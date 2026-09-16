@@ -324,15 +324,31 @@ body {
   font-size: 0.9rem;
 }
 
-.goal-form {
+.add-event-form {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: flex-start;
   margin-bottom: 16px;
 }
 
-.goal-form .text-input {
-  margin-bottom: 0;
+.add-event-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.add-event-row input[type='date'],
+.add-event-row input[type='time'] {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--surface-alt);
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.add-event-row .btn {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .alarm-overlay {

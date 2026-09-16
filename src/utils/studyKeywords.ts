@@ -12,6 +12,11 @@ const STUDY_KEYWORDS = [
   'evaluación',
   'evaluacion',
   'final',
+  'entrega',
+  'proyecto',
+  'informe',
+  'sustentación',
+  'sustentacion',
 ]
 
 /** Heurística simple: ¿el título del evento suena a algo que hay que estudiar? */

@@ -11,8 +11,12 @@ export function formatEventTime(date: Date, isAllDay: boolean): string {
   })
 }
 
+/** yyyy-mm-dd en hora LOCAL (toISOString() usa UTC y corre el día cerca de medianoche). */
 export function todayKey(date = new Date()): string {
-  return date.toISOString().slice(0, 10)
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
 }
 
 export function formatDuration(totalSeconds: number): string {

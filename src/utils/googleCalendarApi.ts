@@ -15,24 +15,56 @@ function addDays(isoDate: string, days: number): string {
   return dateOnly(new Date(y, m - 1, d + days))
 }
 
-export const GOAL_PREFIX = '🎯 '
+export const GOAL_PREFIX = '📌 '
+
+function combineLocal(date: Date, time: string): Date {
+  const [hours, minutes] = time.split(':').map(Number)
+  const combined = new Date(date)
+  combined.setHours(hours, minutes, 0, 0)
+  return combined
+}
+
+function toRfc3339Local(date: Date): string {
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  return `${dateOnly(date)}T${hh}:${mm}:00`
+}
+
+interface NewEventInput {
+  summary: string
+  /** día del evento (se usa la parte de fecha, en hora local) */
+  date: Date
+  /** hora "HH:MM"; si no se pasa, el evento se crea como "todo el día" */
+  time?: string
+}
 
 /**
- * Crea un evento de día completo para un objetivo diario, para que aparezca mezclado con el
- * resto de los eventos del día. Devuelve el id del evento o null si falló.
- * Para eventos de "todo el día" Google Calendar espera end.date = start.date + 1 día (el rango es exclusivo).
+ * Crea un evento (objetivo, entrega, parcial, etc.) en la fecha indicada, para que aparezca
+ * mezclado con el resto de los eventos del calendario. Devuelve el id del evento o null si falló.
+ * Sin hora, se crea como "todo el día" (end.date = start.date + 1, porque el rango es exclusivo).
+ * Con hora, dura 1 hora por defecto.
  */
-export async function createGoalEvent(accessToken: string, text: string, date: Date): Promise<string | null> {
+export async function createEvent(accessToken: string, input: NewEventInput): Promise<string | null> {
   try {
-    const day = dateOnly(date)
+    const body: Record<string, unknown> = { summary: `${GOAL_PREFIX}${input.summary}` }
+
+    if (input.time) {
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const start = combineLocal(input.date, input.time)
+      const end = new Date(start)
+      end.setHours(end.getHours() + 1)
+      body.start = { dateTime: toRfc3339Local(start), timeZone }
+      body.end = { dateTime: toRfc3339Local(end), timeZone }
+    } else {
+      const day = dateOnly(input.date)
+      body.start = { date: day }
+      body.end = { date: addDays(day, 1) }
+    }
+
     const res = await fetch(EVENTS_BASE, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        summary: `${GOAL_PREFIX}${text}`,
-        start: { date: day },
-        end: { date: addDays(day, 1) },
-      }),
+      body: JSON.stringify(body),
     })
     if (!res.ok) return null
     const data = (await res.json()) as { id?: string }
@@ -63,11 +95,6 @@ function nextDateForWeekday(day: Weekday): Date {
   return result
 }
 
-function localDateTime(date: Date, time: string): string {
-  const [hours, minutes] = time.split(':')
-  return `${dateOnly(date)}T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:00`
-}
-
 interface ClassEventInput {
   subject: string
   day: Weekday
@@ -87,8 +114,8 @@ export async function createRecurringClassEvent(accessToken: string, entry: Clas
       body: JSON.stringify({
         summary: entry.subject,
         location: entry.location,
-        start: { dateTime: localDateTime(date, entry.startTime), timeZone },
-        end: { dateTime: localDateTime(date, entry.endTime), timeZone },
+        start: { dateTime: toRfc3339Local(combineLocal(date, entry.startTime)), timeZone },
+        end: { dateTime: toRfc3339Local(combineLocal(date, entry.endTime)), timeZone },
         recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${entry.day}`],
       }),
     })
