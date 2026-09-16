@@ -1,0 +1,326 @@
+:root {
+  --bg: #0f1120;
+  --surface: #181b30;
+  --surface-alt: #21254a;
+  --text: #f2f3fb;
+  --muted: #9599c2;
+  --primary: #6366f1;
+  --primary-hover: #818cf8;
+  --accent: #fbbf24;
+  --danger: #f87171;
+  --success: #34d399;
+  --radius: 14px;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+.app-header h1 {
+  margin: 0 0 4px;
+  font-size: 1.8rem;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.error-text {
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.login-bar {
+  margin: 16px 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 800px) {
+  .layout {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+.card.warning {
+  border: 1px solid var(--accent);
+}
+
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.card-header h2 {
+  margin: 0;
+}
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.btn.secondary {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--surface-alt);
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 4px 8px;
+}
+
+.icon-btn:hover {
+  color: var(--danger);
+}
+
+.offset-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+  color: var(--muted);
+}
+
+.offset-picker select {
+  background: var(--surface-alt);
+  color: var(--text);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.events-list,
+.session-list,
+.goals-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.event-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface-alt);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.event-item.active {
+  outline: 1px solid var(--primary);
+}
+
+.event-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.event-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.event-time {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.badge {
+  font-size: 0.75rem;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.text-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--surface-alt);
+  background: var(--surface-alt);
+  color: var(--text);
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+}
+
+.timer-display {
+  font-size: 2.6rem;
+  font-weight: 700;
+  text-align: center;
+  margin: 8px 0 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-controls {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.session-list li {
+  display: flex;
+  justify-content: space-between;
+  background: var(--surface-alt);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+}
+
+.progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--success);
+  transition: width 0.2s ease;
+}
+
+.goal-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.goal-form .text-input {
+  margin-bottom: 0;
+}
+
+.goal-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-alt);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.goal-item label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.goal-item.done span {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.alarm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 50;
+  padding: 16px;
+}
+
+.alarm-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 32px;
+  text-align: center;
+  max-width: 320px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.alarm-icon {
+  font-size: 2.5rem;
+  margin: 0 0 8px;
+}
+
+.app-footer {
+  margin-top: 32px;
+  text-align: center;
+}
