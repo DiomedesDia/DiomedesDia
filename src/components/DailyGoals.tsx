@@ -2,8 +2,13 @@ import { useState } from 'react'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import type { DailyGoal } from '../types'
 import { todayKey } from '../utils/formatDate'
+import { createGoalEvent, deleteGoalEvent, updateGoalEvent } from '../utils/googleCalendarApi'
 
-export function DailyGoals() {
+interface Props {
+  accessToken: string | null
+}
+
+export function DailyGoals({ accessToken }: Props) {
   const today = todayKey()
   const [goalsByDay, setGoalsByDay] = useLocalStorage<Record<string, DailyGoal[]>>('daily-goals', {})
   const [draft, setDraft] = useState('')
@@ -19,16 +24,34 @@ export function DailyGoals() {
     e.preventDefault()
     const text = draft.trim()
     if (!text) return
-    setTodayGoals((prev) => [...prev, { id: crypto.randomUUID(), text, done: false }])
+    const id = crypto.randomUUID()
+    setTodayGoals((prev) => [...prev, { id, text, done: false }])
     setDraft('')
+
+    if (accessToken) {
+      createGoalEvent(accessToken, text, new Date()).then((eventId) => {
+        if (!eventId) return
+        setTodayGoals((prev) => prev.map((g) => (g.id === id ? { ...g, calendarEventId: eventId } : g)))
+      })
+    }
   }
 
   const toggleGoal = (id: string) => {
-    setTodayGoals((prev) => prev.map((g) => (g.id === id ? { ...g, done: !g.done } : g)))
+    const goal = goals.find((g) => g.id === id)
+    if (!goal) return
+    const nextDone = !goal.done
+    setTodayGoals((prev) => prev.map((g) => (g.id === id ? { ...g, done: nextDone } : g)))
+    if (accessToken && goal.calendarEventId) {
+      updateGoalEvent(accessToken, goal.calendarEventId, goal.text, nextDone)
+    }
   }
 
   const removeGoal = (id: string) => {
+    const goal = goals.find((g) => g.id === id)
     setTodayGoals((prev) => prev.filter((g) => g.id !== id))
+    if (accessToken && goal?.calendarEventId) {
+      deleteGoalEvent(accessToken, goal.calendarEventId)
+    }
   }
 
   return (
@@ -67,6 +90,7 @@ export function DailyGoals() {
             <label>
               <input type="checkbox" checked={goal.done} onChange={() => toggleGoal(goal.id)} />
               <span>{goal.text}</span>
+              {goal.calendarEventId && <span title="Sincronizado con Google Calendar">📅</span>}
             </label>
             <button className="icon-btn" onClick={() => removeGoal(goal.id)} aria-label="Eliminar objetivo">
               ✕
@@ -76,6 +100,12 @@ export function DailyGoals() {
       </ul>
 
       {goals.length === 0 && <p className="muted">Todavía no agregaste objetivos para hoy.</p>}
+
+      {!accessToken && (
+        <p className="muted small-note">
+          Conectá tu Google Calendar arriba para que tus objetivos de hoy también aparezcan ahí como eventos.
+        </p>
+      )}
     </section>
   )
 }

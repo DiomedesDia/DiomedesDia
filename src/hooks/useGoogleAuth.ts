@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-const SCOPE = 'https://www.googleapis.com/auth/calendar.readonly'
-const TOKEN_STORAGE_KEY = 'gcal-access-token'
+// calendar.events cubre lectura y escritura de eventos (crear/editar/borrar), sin dar acceso
+// a la configuración de los calendarios en sí. Necesario para poder sincronizar los objetivos
+// diarios como eventos.
+const SCOPE = 'https://www.googleapis.com/auth/calendar.events'
+// v2 porque el scope cambió (antes era solo lectura): un token viejo guardado no alcanza y
+// hay que forzar un nuevo inicio de sesión que pida el permiso de escritura.
+const TOKEN_STORAGE_KEY = 'gcal-access-token-v2'
 
 interface StoredToken {
   accessToken: string

@@ -71,7 +71,7 @@ export default function App() {
 
         <div className="column">
           <StudyTimer />
-          <DailyGoals />
+          <DailyGoals accessToken={auth.accessToken} />
         </div>
       </main>
 

@@ -26,4 +26,6 @@ export interface DailyGoal {
   id: string
   text: string
   done: boolean
+  /** id del evento en Google Calendar creado para este objetivo, si el usuario está conectado */
+  calendarEventId?: string
 }
