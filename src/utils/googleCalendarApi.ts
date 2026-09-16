@@ -15,12 +15,11 @@ function addDays(isoDate: string, days: number): string {
   return dateOnly(new Date(y, m - 1, d + days))
 }
 
-function goalSummary(text: string, done: boolean): string {
-  return `${done ? '✅' : '🎯'} ${text}`
-}
+export const GOAL_PREFIX = '🎯 '
 
 /**
- * Crea un evento de día completo para un objetivo diario. Devuelve el id del evento o null si falló.
+ * Crea un evento de día completo para un objetivo diario, para que aparezca mezclado con el
+ * resto de los eventos del día. Devuelve el id del evento o null si falló.
  * Para eventos de "todo el día" Google Calendar espera end.date = start.date + 1 día (el rango es exclusivo).
  */
 export async function createGoalEvent(accessToken: string, text: string, date: Date): Promise<string | null> {
@@ -30,7 +29,7 @@ export async function createGoalEvent(accessToken: string, text: string, date: D
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        summary: goalSummary(text, false),
+        summary: `${GOAL_PREFIX}${text}`,
         start: { date: day },
         end: { date: addDays(day, 1) },
       }),
@@ -40,18 +39,6 @@ export async function createGoalEvent(accessToken: string, text: string, date: D
     return data.id ?? null
   } catch {
     return null
-  }
-}
-
-export async function updateGoalEvent(accessToken: string, eventId: string, text: string, done: boolean): Promise<void> {
-  try {
-    await fetch(`${EVENTS_BASE}/${eventId}`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary: goalSummary(text, done) }),
-    })
-  } catch {
-    // si falla, el objetivo sigue funcionando localmente; se sincroniza en el próximo cambio
   }
 }
 

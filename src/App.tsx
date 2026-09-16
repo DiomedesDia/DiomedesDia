@@ -7,9 +7,9 @@ import { LoginButton } from './components/LoginButton'
 import { EventsList } from './components/EventsList'
 import { AlarmBanner } from './components/AlarmBanner'
 import { StudyTimer } from './components/StudyTimer'
-import { DailyGoals } from './components/DailyGoals'
 import { ClassSchedule } from './components/ClassSchedule'
 import { requestNotificationPermission } from './utils/alarm'
+import { createGoalEvent, deleteCalendarEvent } from './utils/googleCalendarApi'
 import type { ReminderOffset } from './types'
 
 export default function App() {
@@ -29,7 +29,7 @@ export default function App() {
 
       <header className="app-header">
         <h1>📚 Study Buddy</h1>
-        <p className="muted">Tu calendario, tus recordatorios de estudio, tu cronómetro y tus objetivos, todo en un lugar.</p>
+        <p className="muted">Tu calendario, tus recordatorios de estudio y tu cronómetro, todo en un lugar.</p>
       </header>
 
       <LoginButton
@@ -60,11 +60,21 @@ export default function App() {
                 })
               }
               onRefresh={refresh}
+              onAddGoal={async (text) => {
+                if (!auth.accessToken) return
+                await createGoalEvent(auth.accessToken, text, new Date())
+                await refresh()
+              }}
+              onDeleteEvent={async (eventId) => {
+                if (!auth.accessToken) return
+                await deleteCalendarEvent(auth.accessToken, eventId)
+                await refresh()
+              }}
             />
           ) : (
             auth.isConfigured && (
               <div className="card">
-                <p className="muted">Conecta tu cuenta de Google para ver tus eventos y activar los recordatorios.</p>
+                <p className="muted">Conecta tu cuenta de Google para ver tus eventos, agregar objetivos y activar los recordatorios.</p>
               </div>
             )
           )}
@@ -73,14 +83,13 @@ export default function App() {
 
         <div className="column">
           <StudyTimer />
-          <DailyGoals accessToken={auth.accessToken} />
         </div>
       </main>
 
       <footer className="app-footer">
         <p className="muted">
-          Los recordatorios suenan mientras esta pestaña esté abierta en tu navegador. Tus datos de cronómetro y objetivos se
-          guardan solo en este dispositivo.
+          Los recordatorios suenan mientras esta pestaña esté abierta en tu navegador. Los objetivos y el horario se guardan
+          como eventos reales en tu Google Calendar; el cronómetro se guarda solo en este dispositivo.
         </p>
       </footer>
     </div>

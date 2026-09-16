@@ -22,14 +22,6 @@ export interface StudySession {
   durationSeconds: number
 }
 
-export interface DailyGoal {
-  id: string
-  text: string
-  done: boolean
-  /** id del evento en Google Calendar creado para este objetivo, si el usuario está conectado */
-  calendarEventId?: string
-}
-
 export type Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU'
 
 export interface ClassScheduleEntry {
