@@ -1,22 +1,23 @@
 import express from 'express'
 import dotenv from 'dotenv'
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenAI, FunctionCallingConfigMode } from '@google/genai'
 
 dotenv.config()
 
 const app = express()
 app.use(express.json({ limit: '2mb' }))
 
-const client = new Anthropic() // lee ANTHROPIC_API_KEY del entorno; nunca llega al navegador
+const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) // nunca llega al navegador
 
-const MODEL = 'claude-opus-5'
+// "latest" para no depender de una versión puntual que Google termine retirando.
+const MODEL = 'gemini-flash-latest'
 
 const CALENDAR_TOOLS = [
   {
     name: 'create_event',
     description:
       'Crea un evento puntual (objetivo de estudio, parcial, entrega de proyecto) en el calendario de todas las cuentas de Google vinculadas.',
-    input_schema: {
+    parametersJsonSchema: {
       type: 'object',
       properties: {
         summary: { type: 'string', description: 'Título del evento, breve y claro' },
@@ -33,7 +34,7 @@ const CALENDAR_TOOLS = [
     name: 'delete_event',
     description:
       'Borra un evento puntual que ya existe (creado antes por la app). Necesita el eventId y accountEmail exactos de la lista de "próximos eventos" del contexto.',
-    input_schema: {
+    parametersJsonSchema: {
       type: 'object',
       properties: {
         eventId: { type: 'string' },
@@ -45,7 +46,7 @@ const CALENDAR_TOOLS = [
   {
     name: 'add_class',
     description: 'Agrega una clase nueva al horario semanal recurrente y la sincroniza con todas las cuentas vinculadas.',
-    input_schema: {
+    parametersJsonSchema: {
       type: 'object',
       properties: {
         subject: { type: 'string', description: 'Nombre de la materia' },
@@ -61,7 +62,7 @@ const CALENDAR_TOOLS = [
     name: 'edit_class',
     description:
       'Edita una clase existente del horario semanal (por ejemplo, para posponerla a otro día u horario, o corregir un dato). Solo hace falta mandar los campos que cambian. Necesita el classId exacto de la lista de "horario semanal" del contexto.',
-    input_schema: {
+    parametersJsonSchema: {
       type: 'object',
       properties: {
         classId: { type: 'string' },
@@ -77,7 +78,7 @@ const CALENDAR_TOOLS = [
   {
     name: 'delete_class',
     description: 'Elimina una clase del horario semanal, incluyendo sus eventos recurrentes en Google Calendar.',
-    input_schema: {
+    parametersJsonSchema: {
       type: 'object',
       properties: { classId: { type: 'string' } },
       required: ['classId'],
@@ -119,25 +120,27 @@ que falte.`
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ configured: Boolean(process.env.ANTHROPIC_API_KEY) })
+  res.json({ configured: Boolean(process.env.GEMINI_API_KEY) })
 })
 
 app.post('/api/agent', async (req, res) => {
   try {
-    const { messages, context } = req.body
-    if (!Array.isArray(messages)) {
-      res.status(400).json({ error: 'Falta el array de mensajes.' })
+    const { contents, context } = req.body
+    if (!Array.isArray(contents)) {
+      res.status(400).json({ error: 'Falta el array de contents.' })
       return
     }
-    const response = await client.messages.create({
+    const response = await client.models.generateContent({
       model: MODEL,
-      max_tokens: 2048,
-      output_config: { effort: 'low' },
-      system: buildSystemPrompt(context ?? {}),
-      tools: CALENDAR_TOOLS,
-      messages,
+      contents,
+      config: {
+        systemInstruction: buildSystemPrompt(context ?? {}),
+        tools: [{ functionDeclarations: CALENDAR_TOOLS }],
+        toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
+      },
     })
-    res.json(response)
+    const parts = response.candidates?.[0]?.content?.parts ?? []
+    res.json({ role: 'model', parts })
   } catch (err) {
     console.error('Error del agente:', err)
     res.status(500).json({ error: err instanceof Error ? err.message : 'Error del agente.' })
@@ -147,7 +150,7 @@ app.post('/api/agent', async (req, res) => {
 const PORT = process.env.AGENT_PORT || 3001
 app.listen(PORT, () => {
   console.log(`Servidor del agente escuchando en http://localhost:${PORT}`)
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('⚠️  Falta ANTHROPIC_API_KEY en tu .env — el agente no va a poder responder.')
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn('⚠️  Falta GEMINI_API_KEY en tu .env — el agente no va a poder responder.')
   }
 })

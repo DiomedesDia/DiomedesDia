@@ -3,31 +3,20 @@ import type { CalendarEvent, LinkedAccount, Weekday } from '../types'
 import type { ClassScheduleApi } from './useClassSchedule'
 import { createEvent, deleteCalendarEvent } from '../utils/googleCalendarApi'
 
-interface AgentTextBlock {
-  type: 'text'
+interface FunctionCallPart {
+  functionCall: { id?: string; name: string; args: Record<string, unknown> }
+}
+interface FunctionResponsePart {
+  functionResponse: { id?: string; name: string; response: Record<string, unknown> }
+}
+interface TextPart {
   text: string
 }
-interface AgentToolUseBlock {
-  type: 'tool_use'
-  id: string
-  name: string
-  input: Record<string, unknown>
-}
-interface AgentToolResultBlock {
-  type: 'tool_result'
-  tool_use_id: string
-  content: string
-}
-type AgentContentBlock = AgentTextBlock | AgentToolUseBlock | AgentToolResultBlock
+type AgentPart = TextPart | FunctionCallPart | FunctionResponsePart
 
-interface AgentRequestMessage {
-  role: 'user' | 'assistant'
-  content: string | AgentContentBlock[]
-}
-
-interface AgentApiResponse {
-  content: AgentContentBlock[]
-  stop_reason: string
+interface AgentContent {
+  role: 'user' | 'model'
+  parts: AgentPart[]
 }
 
 export interface ChatMessage {
@@ -42,6 +31,13 @@ interface Deps {
   refreshEvents: () => Promise<void>
 }
 
+function isFunctionCallPart(part: AgentPart): part is FunctionCallPart {
+  return 'functionCall' in part
+}
+function isTextPart(part: AgentPart): part is TextPart {
+  return 'text' in part && typeof part.text === 'string'
+}
+
 function str(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
@@ -50,7 +46,7 @@ const MAX_TOOL_ROUNDS = 6
 
 export function useAgentChat({ accounts, events, schedule, refreshEvents }: Deps) {
   const [chatLog, setChatLog] = useState<ChatMessage[]>([])
-  const [history, setHistory] = useState<AgentRequestMessage[]>([])
+  const [history, setHistory] = useState<AgentContent[]>([])
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isConfigured, setIsConfigured] = useState(true)
@@ -138,15 +134,15 @@ export function useAgentChat({ accounts, events, schedule, refreshEvents }: Deps
   )
 
   const callAgent = useCallback(
-    async (messages: AgentRequestMessage[]): Promise<AgentApiResponse> => {
+    async (contents: AgentContent[]): Promise<AgentContent> => {
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, context: buildContext() }),
+        body: JSON.stringify({ contents, context: buildContext() }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error del agente.')
-      return data as AgentApiResponse
+      return data as AgentContent
     },
     [buildContext],
   )
@@ -159,28 +155,30 @@ export function useAgentChat({ accounts, events, schedule, refreshEvents }: Deps
       setError(null)
       setChatLog((prev) => [...prev, { role: 'user', text: trimmed }])
 
-      let currentMessages: AgentRequestMessage[] = [...history, { role: 'user', content: trimmed }]
+      let currentContents: AgentContent[] = [...history, { role: 'user', parts: [{ text: trimmed }] }]
       try {
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-          const response = await callAgent(currentMessages)
-          currentMessages = [...currentMessages, { role: 'assistant', content: response.content }]
+          const modelTurn = await callAgent(currentContents)
+          currentContents = [...currentContents, modelTurn]
 
-          if (response.stop_reason !== 'tool_use') {
-            const textBlock = response.content.find((b): b is AgentTextBlock => b.type === 'text')
-            setChatLog((prev) => [...prev, { role: 'assistant', text: textBlock?.text ?? '(sin respuesta)' }])
-            setHistory(currentMessages)
+          const functionCalls = modelTurn.parts.filter(isFunctionCallPart)
+          if (functionCalls.length === 0) {
+            const textPart = modelTurn.parts.find(isTextPart)
+            setChatLog((prev) => [...prev, { role: 'assistant', text: textPart?.text ?? '(sin respuesta)' }])
+            setHistory(currentContents)
             return
           }
 
-          const toolUses = response.content.filter((b): b is AgentToolUseBlock => b.type === 'tool_use')
-          const toolResults: AgentToolResultBlock[] = await Promise.all(
-            toolUses.map(async (block) => ({
-              type: 'tool_result' as const,
-              tool_use_id: block.id,
-              content: await executeTool(block.name, block.input),
+          const responseParts: FunctionResponsePart[] = await Promise.all(
+            functionCalls.map(async ({ functionCall }) => ({
+              functionResponse: {
+                id: functionCall.id,
+                name: functionCall.name,
+                response: { result: await executeTool(functionCall.name, functionCall.args ?? {}) },
+              },
             })),
           )
-          currentMessages = [...currentMessages, { role: 'user', content: toolResults }]
+          currentContents = [...currentContents, { role: 'user', parts: responseParts }]
         }
         setError('El agente encadenó demasiadas acciones seguidas — probá de nuevo con un pedido más simple.')
       } catch (err) {

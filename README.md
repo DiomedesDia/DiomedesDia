@@ -7,9 +7,9 @@ Aplicación web que se conecta a **tu Google Calendar** para ayudarte a organiza
 - ✅ **Objetivos y eventos puntuales**: agregá desde la misma lista un objetivo del día, un parcial o una entrega de proyecto en cualquier fecha futura, con hora opcional. Quedan mezclados ahí como uno más (con el ícono 📌), en vez de una lista aparte.
 - 🗓️ **Horario semanal**: cargá tus clases (materia, día, hora, lugar/profesor) y sincronizalas como eventos recurrentes semanales en tu Google Calendar con un clic.
 - 👥 **Varias cuentas de Google a la vez**: vinculá más de una cuenta (por ejemplo, tu personal y la del cole/facultad). "Próximos eventos" muestra la mezcla de las dos, y todo lo que agregues desde la app (objetivos, parciales, entregas, horario) se crea en el calendario de **todas** las cuentas vinculadas al mismo tiempo.
-- 🤖 **Asistente de calendario con IA**: el botón flotante abre un chat (con Claude, de Anthropic) al que le podés pedir cosas en lenguaje natural — "agregame un parcial de física el jueves a las 3pm", "posponé mi clase del lunes para el miércoles", "borrá la entrega que agregué ayer" — y el asistente decide qué crear/editar/borrar y lo hace por vos. Requiere un pequeño servidor propio (incluido) y tu clave de la API de Anthropic — ver la sección de configuración más abajo.
+- 🤖 **Asistente de calendario con IA**: el botón flotante abre un chat (con Gemini, de Google — gratis) al que le podés pedir cosas en lenguaje natural — "agregame un parcial de física el jueves a las 3pm", "posponé mi clase del lunes para el miércoles", "borrá la entrega que agregué ayer" — y el asistente decide qué crear/editar/borrar y lo hace por vos. Requiere un pequeño servidor propio (incluido) y tu clave gratis de la API de Gemini — ver la sección de configuración más abajo.
 
-La lectura y escritura de tu Google Calendar es 100% desde tu navegador (no hay backend de por medio ni tus datos de calendario pasan por ningún servidor propio): tus datos de cronómetro quedan guardados en el `localStorage` de tu navegador; los objetivos, parciales/entregas y el horario viven directamente en tu Google Calendar. La app puede **leer, crear, editar y borrar eventos** en tu Google Calendar (permiso `calendar.events`); no toca la configuración de tus calendarios ni nada fuera de eventos. El asistente de IA sí necesita un pequeño servidor propio (incluido en este repo) — es el único componente no-100%-cliente de la app, y existe solo para no exponer tu clave de la API de Anthropic en el navegador.
+La lectura y escritura de tu Google Calendar es 100% desde tu navegador (no hay backend de por medio ni tus datos de calendario pasan por ningún servidor propio): tus datos de cronómetro quedan guardados en el `localStorage` de tu navegador; los objetivos, parciales/entregas y el horario viven directamente en tu Google Calendar. La app puede **leer, crear, editar y borrar eventos** en tu Google Calendar (permiso `calendar.events`); no toca la configuración de tus calendarios ni nada fuera de eventos. El asistente de IA sí necesita un pequeño servidor propio (incluido en este repo) — es el único componente no-100%-cliente de la app, y existe solo para no exponer tu clave de la API de Gemini en el navegador.
 
 > Cada evento que agregás así (objetivo, parcial, entrega…) queda en la fecha que elijas, con hora si la pusiste o como "todo el día" si la dejaste vacía. Aparece mezclado en "Próximos eventos" con el ícono 📌; borrarlo desde ahí (✕) borra también el evento real en tu calendario.
 
@@ -45,16 +45,16 @@ Abrí `http://localhost:5173`, hacé clic en **"Conectar con Google Calendar"** 
 
 `npm run dev` ahora arranca **dos** procesos a la vez (el frontend en `:5173` y el servidor del asistente en `:3001`) — vas a ver los logs de ambos, con el prefijo `web` o `agent`, en la misma terminal. Si el asistente de IA no te interesa, no pasa nada: podés dejar el paso 3 sin hacer y el resto de la app funciona igual (el botón 🤖 va a avisar que falta configurarlo).
 
-## 3. Configurar el asistente de IA (opcional)
+## 3. Configurar el asistente de IA (opcional, gratis)
 
-El botón flotante 🤖 abre un chat con un asistente que puede crear, editar y borrar tus eventos/horario por vos, en lenguaje natural. Corre sobre la API de Claude (Anthropic) a través de un servidor chiquito incluido en `server/index.js` — así tu clave de API nunca se expone en el navegador.
+El botón flotante 🤖 abre un chat con un asistente que puede crear, editar y borrar tus eventos/horario por vos, en lenguaje natural. Corre sobre la API de **Gemini** (Google) a través de un servidor chiquito incluido en `server/index.js` — así tu clave de API nunca se expone en el navegador.
 
-1. Conseguí una clave en [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) (hace falta una cuenta de Anthropic con algo de crédito cargado; el uso de este asistente cuesta centavos de dólar por mensaje, no es gratis).
+1. Conseguí una clave **gratis** en [aistudio.google.com/apikey](https://aistudio.google.com/apikey) con tu cuenta de Google (la misma que ya usás, o cualquier otra). El nivel gratis de Gemini alcanza de sobra para uso personal — no hace falta poner tarjeta.
 2. Agregala a tu `.env` (el mismo archivo de antes, **sin** el prefijo `VITE_` — así Vite nunca la incluye en el código que baja al navegador):
    ```
-   ANTHROPIC_API_KEY=sk-ant-tu-clave-real
+   GEMINI_API_KEY=tu-clave-real
    ```
-3. Reiniciá `npm run dev`. Si te falta la clave, vas a ver un aviso `⚠️ Falta ANTHROPIC_API_KEY` en la consola del servidor del agente, y el chat de la app te va a avisar que no está configurado.
+3. Reiniciá `npm run dev`. Si te falta la clave, vas a ver un aviso `⚠️ Falta GEMINI_API_KEY` en la consola del servidor del agente, y el chat de la app te va a avisar que no está configurado.
 
 Si no querés usar el asistente, simplemente no completes este paso — el resto de la app (calendario, cronómetro, horario) funciona sin él.
 
@@ -84,7 +84,7 @@ src/
                   llamadas de escritura a Google Calendar (crear/editar/borrar eventos)
 server/
   index.js        servidor del asistente de IA: recibe el mensaje + el contexto del calendario desde el
-                  navegador, llama a la API de Claude con las herramientas de calendario, y devuelve la
+                  navegador, llama a la API de Gemini con las herramientas de calendario, y devuelve la
                   respuesta (nunca ejecuta acciones de Google Calendar él mismo — eso lo hace el navegador,
                   que es quien tiene el token de acceso de cada cuenta)
 ```
@@ -96,6 +96,6 @@ npm run build
 npm run preview
 ```
 
-Esto compila y sirve el frontend, pero **no** el servidor del agente — para desplegarlo necesitás correr `server/index.js` (con `ANTHROPIC_API_KEY` configurada) en algún lado accesible desde donde sirvas el frontend, y actualizar la URL de `/api` en `vite.config.ts` o el proxy de tu hosting para que apunte ahí.
+Esto compila y sirve el frontend, pero **no** el servidor del agente — para desplegarlo necesitás correr `server/index.js` (con `GEMINI_API_KEY` configurada) en algún lado accesible desde donde sirvas el frontend, y actualizar la URL de `/api` en `vite.config.ts` o el proxy de tu hosting para que apunte ahí.
 
 Al desplegar, recordá agregar el dominio final a los **Orígenes autorizados de JavaScript** en Google Cloud Console.
