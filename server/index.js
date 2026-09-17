@@ -119,6 +119,40 @@ de forma breve y conversacional — no repitas toda la información del contexto
 que falte.`
 }
 
+/** Errores transitorios de Google (modelo saturado, límite de tasa) que vale la pena reintentar. */
+function isRetryableError(err) {
+  const msg = err instanceof Error ? err.message : String(err)
+  return /"code":\s*503/.test(msg) || /UNAVAILABLE/.test(msg) || /"code":\s*429/.test(msg) || /RESOURCE_EXHAUSTED/.test(msg)
+}
+
+function friendlyErrorMessage(err) {
+  const msg = err instanceof Error ? err.message : String(err)
+  if (/"code":\s*503/.test(msg) || /UNAVAILABLE/.test(msg)) {
+    return 'El modelo de Gemini está saturado en este momento (mucha demanda en el nivel gratis). Probá de nuevo en unos segundos.'
+  }
+  if (/"code":\s*429/.test(msg) || /RESOURCE_EXHAUSTED/.test(msg)) {
+    return 'Llegaste al límite gratis de mensajes por ahora. Esperá un ratito y probá de nuevo.'
+  }
+  if (/API key not valid/i.test(msg) || /API_KEY_INVALID/.test(msg)) {
+    return 'La clave de Gemini no es válida. Revisá GEMINI_API_KEY en tu .env.'
+  }
+  return msg
+}
+
+async function generateWithRetry(params, attempts = 3) {
+  let lastErr
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await client.models.generateContent(params)
+    } catch (err) {
+      lastErr = err
+      if (!isRetryableError(err) || i === attempts - 1) throw err
+      await new Promise((resolve) => setTimeout(resolve, 600 * (i + 1)))
+    }
+  }
+  throw lastErr
+}
+
 app.get('/api/health', (_req, res) => {
   res.json({ configured: Boolean(process.env.GEMINI_API_KEY) })
 })
@@ -130,7 +164,7 @@ app.post('/api/agent', async (req, res) => {
       res.status(400).json({ error: 'Falta el array de contents.' })
       return
     }
-    const response = await client.models.generateContent({
+    const response = await generateWithRetry({
       model: MODEL,
       contents,
       config: {
@@ -143,7 +177,7 @@ app.post('/api/agent', async (req, res) => {
     res.json({ role: 'model', parts })
   } catch (err) {
     console.error('Error del agente:', err)
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Error del agente.' })
+    res.status(503).json({ error: friendlyErrorMessage(err) })
   }
 })
 
