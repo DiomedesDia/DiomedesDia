@@ -243,6 +243,25 @@ body {
   gap: 8px;
 }
 
+.event-day-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.day-header {
+  margin: 12px 0 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.event-day-group:first-child .day-header {
+  margin-top: 0;
+}
+
 .event-item {
   display: flex;
   align-items: center;

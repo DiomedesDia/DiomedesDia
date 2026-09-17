@@ -37,10 +37,13 @@ export default function App() {
     await refresh()
   }
 
-  const deleteEvent = async (event: CalendarEvent) => {
-    const account = accounts.find((a) => a.email === event.accountEmail)
-    if (!account) return
-    await deleteCalendarEvent(account.accessToken, event.id)
+  const deleteEvents = async (eventsToDelete: CalendarEvent[]) => {
+    await Promise.all(
+      eventsToDelete.map((event) => {
+        const account = accounts.find((a) => a.email === event.accountEmail)
+        return account ? deleteCalendarEvent(account.accessToken, event.id) : Promise.resolve()
+      }),
+    )
     await refresh()
   }
 
@@ -71,7 +74,15 @@ export default function App() {
               error={error}
               offsetMinutes={offsetMinutes}
               onOffsetChange={setOffsetMinutes}
-              onToggleReminder={(key, enabled) => setOverrides((prev) => ({ ...prev, [key]: enabled }))}
+              onToggleReminder={(keys, enabled) =>
+                setOverrides((prev) => {
+                  const next = { ...prev }
+                  keys.forEach((k) => {
+                    next[k] = enabled
+                  })
+                  return next
+                })
+              }
               onToggleSeries={(summary, enabled) =>
                 setOverrides((prev) => {
                   const next = { ...prev }
@@ -83,7 +94,7 @@ export default function App() {
               }
               onRefresh={refresh}
               onAddGoal={addGoalEverywhere}
-              onDeleteEvent={deleteEvent}
+              onDeleteEvent={deleteEvents}
               showAccountLabel={accounts.length > 1}
             />
           ) : (

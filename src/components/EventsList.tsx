@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ReminderEntry } from '../hooks/useReminders'
 import type { CalendarEvent, ReminderOffset } from '../types'
-import { formatEventTime, todayKey } from '../utils/formatDate'
+import { formatDayHeader, formatTimeOnly, todayKey } from '../utils/formatDate'
 import { GOAL_PREFIX } from '../utils/googleCalendarApi'
 import { eventKey } from '../utils/eventKey'
 
@@ -19,12 +19,45 @@ interface Props {
   error: string | null
   offsetMinutes: ReminderOffset
   onOffsetChange: (value: ReminderOffset) => void
-  onToggleReminder: (key: string, enabled: boolean) => void
+  onToggleReminder: (keys: string[], enabled: boolean) => void
   onToggleSeries: (summary: string, enabled: boolean) => void
   onRefresh: () => void
   onAddGoal: (input: NewEventInput) => Promise<void>
-  onDeleteEvent: (event: CalendarEvent) => Promise<void>
+  onDeleteEvent: (events: CalendarEvent[]) => Promise<void>
   showAccountLabel: boolean
+}
+
+interface MergedEntry {
+  key: string
+  event: CalendarEvent
+  enabled: boolean
+  isGoal: boolean
+  members: CalendarEvent[]
+  accountEmails: string[]
+}
+
+/** Junta en una sola fila los eventos que son "lo mismo" (mismo título y horario) en varias cuentas vinculadas. */
+function mergeAcrossAccounts(reminders: ReminderEntry[]): MergedEntry[] {
+  const groups = new Map<string, MergedEntry>()
+  for (const { event, enabled } of reminders) {
+    const groupKey = `${event.summary}||${event.start.getTime()}||${event.isAllDay}`
+    const existing = groups.get(groupKey)
+    if (existing) {
+      existing.enabled = existing.enabled || enabled
+      existing.members.push(event)
+      if (!existing.accountEmails.includes(event.accountEmail)) existing.accountEmails.push(event.accountEmail)
+    } else {
+      groups.set(groupKey, {
+        key: groupKey,
+        event,
+        enabled,
+        isGoal: event.summary.startsWith(GOAL_PREFIX),
+        members: [event],
+        accountEmails: [event.accountEmail],
+      })
+    }
+  }
+  return Array.from(groups.values()).sort((a, b) => a.event.start.getTime() - b.event.start.getTime())
 }
 
 export function EventsList({
@@ -45,9 +78,12 @@ export function EventsList({
   const [time, setTime] = useState('')
   const [adding, setAdding] = useState(false)
 
+  const merged = mergeAcrossAccounts(reminders)
+
   const summaryCounts = new Map<string, number>()
-  reminders.forEach(({ event }) => summaryCounts.set(event.summary, (summaryCounts.get(event.summary) ?? 0) + 1))
+  merged.forEach((m) => summaryCounts.set(m.event.summary, (summaryCounts.get(m.event.summary) ?? 0) + 1))
   const shownGroupButton = new Set<string>()
+  let lastDayKey = ''
 
   const submitGoal = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -105,49 +141,65 @@ export function EventsList({
       </label>
 
       {error && <p className="error-text">{error}</p>}
-      {!error && reminders.length === 0 && !loading && <p className="muted">No hay eventos próximos en tu calendario.</p>}
+      {!error && merged.length === 0 && !loading && <p className="muted">No hay eventos próximos en tu calendario.</p>}
 
       <ul className="events-list">
-        {reminders.map(({ event, enabled }) => {
-          const key = eventKey(event)
+        {merged.map((entry) => {
+          const { event } = entry
+          const memberKeys = entry.members.map(eventKey)
+          const dayKey = todayKey(event.start)
+          const showDayHeader = dayKey !== lastDayKey
+          lastDayKey = dayKey
+
           const groupCount = summaryCounts.get(event.summary) ?? 1
           const showGroupButton = groupCount > 1 && !shownGroupButton.has(event.summary)
           if (showGroupButton) shownGroupButton.add(event.summary)
-          const groupAllEnabled = reminders.filter((r) => r.event.summary === event.summary).every((r) => r.enabled)
-          const isGoal = event.summary.startsWith(GOAL_PREFIX)
+          const groupAllEnabled = merged.filter((m) => m.event.summary === event.summary).every((m) => m.enabled)
 
           return (
-            <li key={key} className={enabled ? 'event-item active' : 'event-item'}>
-              <label className="event-toggle">
-                <input type="checkbox" checked={enabled} onChange={(e) => onToggleReminder(key, e.target.checked)} />
-                <div>
-                  <p className="event-title">{event.summary}</p>
-                  <p className="event-time">
-                    {formatEventTime(event.start, event.isAllDay)}
-                    {showAccountLabel && <span className="account-tag"> · {event.accountEmail}</span>}
-                  </p>
-                  {showGroupButton && (
-                    <button
-                      className="link-btn"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        onToggleSeries(event.summary, !groupAllEnabled)
-                      }}
-                    >
-                      {groupAllEnabled
-                        ? `🔇 silenciar las ${groupCount} repeticiones de "${event.summary}"`
-                        : `🔔 activar las ${groupCount} repeticiones de "${event.summary}"`}
+            <li key={entry.key} className="event-day-group">
+              {showDayHeader && <p className="day-header">{formatDayHeader(event.start)}</p>}
+              <div className={entry.enabled ? 'event-item active' : 'event-item'}>
+                <label className="event-toggle">
+                  <input
+                    type="checkbox"
+                    checked={entry.enabled}
+                    onChange={(e) => onToggleReminder(memberKeys, e.target.checked)}
+                  />
+                  <div>
+                    <p className="event-title">{event.summary}</p>
+                    <p className="event-time">
+                      {formatTimeOnly(event.start, event.isAllDay)}
+                      {showAccountLabel && (
+                        <span className="account-tag">
+                          {' · '}
+                          {entry.accountEmails.length > 1 ? `en tus ${entry.accountEmails.length} cuentas` : entry.accountEmails[0]}
+                        </span>
+                      )}
+                    </p>
+                    {showGroupButton && (
+                      <button
+                        className="link-btn"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          onToggleSeries(event.summary, !groupAllEnabled)
+                        }}
+                      >
+                        {groupAllEnabled
+                          ? `🔇 silenciar las ${groupCount} repeticiones de "${event.summary}"`
+                          : `🔔 activar las ${groupCount} repeticiones de "${event.summary}"`}
+                      </button>
+                    )}
+                  </div>
+                </label>
+                <div className="event-actions">
+                  {entry.enabled && <span className="badge">🔔 recordatorio activo</span>}
+                  {entry.isGoal && (
+                    <button className="icon-btn" onClick={() => onDeleteEvent(entry.members)} aria-label="Eliminar evento">
+                      ✕
                     </button>
                   )}
                 </div>
-              </label>
-              <div className="event-actions">
-                {enabled && <span className="badge">🔔 recordatorio activo</span>}
-                {isGoal && (
-                  <button className="icon-btn" onClick={() => onDeleteEvent(event)} aria-label="Eliminar evento">
-                    ✕
-                  </button>
-                )}
               </div>
             </li>
           )
