@@ -103,6 +103,11 @@ interface ClassEventInput {
   location?: string
 }
 
+/** Identifica de forma estable una clase por su contenido (materia + día + horario), sin depender del id local. */
+function classFingerprint(entry: ClassEventInput): string {
+  return `${entry.day}-${entry.startTime}-${entry.endTime}-${entry.subject.trim().toLowerCase()}`
+}
+
 function recurringClassEventBody(entry: ClassEventInput) {
   const date = nextDateForWeekday(entry.day)
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -112,12 +117,70 @@ function recurringClassEventBody(entry: ClassEventInput) {
     start: { dateTime: toRfc3339Local(combineLocal(date, entry.startTime)), timeZone },
     end: { dateTime: toRfc3339Local(combineLocal(date, entry.endTime)), timeZone },
     recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${entry.day}`],
+    extendedProperties: { private: { classFingerprint: classFingerprint(entry) } },
   }
 }
 
-/** Crea un evento que se repite cada semana el mismo día/horario (para el horario de clases). */
+interface CalendarApiEvent {
+  id: string
+  summary?: string
+  start?: { dateTime?: string }
+  recurrence?: string[]
+}
+
+async function searchEvents(accessToken: string, params: Record<string, string>): Promise<CalendarApiEvent[]> {
+  try {
+    const query = new URLSearchParams(params)
+    const res = await fetch(`${EVENTS_BASE}?${query.toString()}`, { headers: { Authorization: `Bearer ${accessToken}` } })
+    if (!res.ok) return []
+    const data = (await res.json()) as { items?: CalendarApiEvent[] }
+    return data.items ?? []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Busca si esta clase ya existe como evento recurrente en el calendario (aunque la app, en este
+ * navegador, no tenga registrado que ya se sincronizó — por ejemplo, porque se sincronizó antes
+ * desde otro navegador/dispositivo). Primero busca por la marca exacta que dejamos al crearla; si
+ * no la encuentra (eventos creados antes de que existiera esta marca), busca por texto y confirma
+ * que el día y la hora de inicio coincidan, para no confundir materias que se repiten en horarios
+ * distintos.
+ */
+async function findExistingClassEvent(accessToken: string, entry: ClassEventInput): Promise<string | null> {
+  const fingerprint = classFingerprint(entry)
+  const tagged = await searchEvents(accessToken, { privateExtendedProperty: `classFingerprint=${fingerprint}`, maxResults: '1' })
+  if (tagged[0]?.id) return tagged[0].id
+
+  const candidates = await searchEvents(accessToken, { q: entry.subject, maxResults: '50', singleEvents: 'false' })
+  const match = candidates.find((event) => {
+    if (!event.recurrence?.some((r) => r.includes(`BYDAY=${entry.day}`))) return false
+    if (!event.start?.dateTime) return false
+    const hhmm = event.start.dateTime.slice(11, 16)
+    return hhmm === entry.startTime && (event.summary ?? '').trim().toLowerCase() === entry.subject.trim().toLowerCase()
+  })
+  return match?.id ?? null
+}
+
+/**
+ * Crea un evento que se repite cada semana el mismo día/horario (para el horario de clases).
+ * Antes de crear nada, revisa si ya existe en ese calendario (ver `findExistingClassEvent`) y, si
+ * es así, lo adopta en vez de duplicarlo — así "Sincronizar" es seguro de tocar más de una vez,
+ * incluso si la app perdió el registro local de qué ya estaba sincronizado.
+ */
 export async function createRecurringClassEvent(accessToken: string, entry: ClassEventInput): Promise<string | null> {
   try {
+    const existingId = await findExistingClassEvent(accessToken, entry)
+    if (existingId) {
+      await fetch(`${EVENTS_BASE}/${existingId}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extendedProperties: { private: { classFingerprint: classFingerprint(entry) } } }),
+      }).catch(() => {})
+      return existingId
+    }
+
     const res = await fetch(EVENTS_BASE, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },

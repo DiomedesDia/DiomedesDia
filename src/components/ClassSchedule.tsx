@@ -97,8 +97,8 @@ export function ClassSchedule({ accounts, schedule }: Props) {
 
       {accounts.length > 0 && hasSyncedSomething && (
         <button className="link-btn resync-all" onClick={handleResyncAll}>
-          ¿Tu horario quedó duplicado o desincronizado en Google Calendar? Borrá los eventos de más a mano ahí y tocá acá
-          para resincronizar todo desde cero.
+          ¿Tu horario tiene eventos viejos o de más en Google Calendar? Borrá los que sobran a mano ahí y tocá acá para que
+          la app vuelva a revisar el estado real de tu calendario (ya no se duplican, aunque toques "Sincronizar" de nuevo).
         </button>
       )}
 
