@@ -2,8 +2,8 @@ import { useState } from 'react'
 import type { ReminderEntry } from '../hooks/useReminders'
 import type { CalendarEvent, ReminderOffset } from '../types'
 import { formatDayHeader, formatTimeOnly, todayKey } from '../utils/formatDate'
-import { GOAL_PREFIX } from '../utils/googleCalendarApi'
 import { eventKey } from '../utils/eventKey'
+import { mergeEventsAcrossAccounts } from '../utils/mergeEvents'
 
 const OFFSET_OPTIONS: ReminderOffset[] = [0, 5, 10, 15, 30, 60, 120]
 
@@ -27,39 +27,6 @@ interface Props {
   showAccountLabel: boolean
 }
 
-interface MergedEntry {
-  key: string
-  event: CalendarEvent
-  enabled: boolean
-  isGoal: boolean
-  members: CalendarEvent[]
-  accountEmails: string[]
-}
-
-/** Junta en una sola fila los eventos que son "lo mismo" (mismo título y horario) en varias cuentas vinculadas. */
-function mergeAcrossAccounts(reminders: ReminderEntry[]): MergedEntry[] {
-  const groups = new Map<string, MergedEntry>()
-  for (const { event, enabled } of reminders) {
-    const groupKey = `${event.summary}||${event.start.getTime()}||${event.isAllDay}`
-    const existing = groups.get(groupKey)
-    if (existing) {
-      existing.enabled = existing.enabled || enabled
-      existing.members.push(event)
-      if (!existing.accountEmails.includes(event.accountEmail)) existing.accountEmails.push(event.accountEmail)
-    } else {
-      groups.set(groupKey, {
-        key: groupKey,
-        event,
-        enabled,
-        isGoal: event.summary.startsWith(GOAL_PREFIX),
-        members: [event],
-        accountEmails: [event.accountEmail],
-      })
-    }
-  }
-  return Array.from(groups.values()).sort((a, b) => a.event.start.getTime() - b.event.start.getTime())
-}
-
 export function EventsList({
   reminders,
   loading,
@@ -78,7 +45,11 @@ export function EventsList({
   const [time, setTime] = useState('')
   const [adding, setAdding] = useState(false)
 
-  const merged = mergeAcrossAccounts(reminders)
+  const enabledByKey = new Map(reminders.map((r) => [eventKey(r.event), r.enabled]))
+  const merged = mergeEventsAcrossAccounts(reminders.map((r) => r.event)).map((entry) => ({
+    ...entry,
+    enabled: entry.members.some((m) => enabledByKey.get(eventKey(m))),
+  }))
 
   const summaryCounts = new Map<string, number>()
   merged.forEach((m) => summaryCounts.set(m.event.summary, (summaryCounts.get(m.event.summary) ?? 0) + 1))

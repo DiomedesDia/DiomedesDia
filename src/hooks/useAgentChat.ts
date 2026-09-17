@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CalendarEvent, LinkedAccount, Weekday } from '../types'
 import type { ClassScheduleApi } from './useClassSchedule'
 import { createEvent, deleteCalendarEvent } from '../utils/googleCalendarApi'
+import { mergeEventsAcrossAccounts } from '../utils/mergeEvents'
+import { formatTimeOnly } from '../utils/formatDate'
 
 interface FunctionCallPart {
   functionCall: { id?: string; name: string; args: Record<string, unknown> }
@@ -27,6 +29,7 @@ export interface ChatMessage {
 interface Deps {
   accounts: LinkedAccount[]
   events: CalendarEvent[]
+  loading: boolean
   schedule: ClassScheduleApi
   refreshEvents: () => Promise<void>
 }
@@ -42,14 +45,60 @@ function str(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
+function loadVoicePreference(): boolean {
+  try {
+    return localStorage.getItem('agent-voice-enabled') !== 'false'
+  } catch {
+    return true
+  }
+}
+
+/** Arma un saludo con un resumen del día, sin llamar a la API (gratis e instantáneo). */
+function buildGreeting(accounts: LinkedAccount[], events: CalendarEvent[], pendingClasses: number): string {
+  const hour = new Date().getHours()
+  const salutation = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches'
+
+  if (accounts.length === 0) {
+    return `${salutation}, soy tu asistente de calendario. Vinculá una cuenta de Google arriba para que pueda ayudarte con tus eventos y tu horario.`
+  }
+
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfTomorrow = new Date(startOfToday)
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1)
+
+  const todaysEvents = mergeEventsAcrossAccounts(events.filter((e) => e.start >= startOfToday && e.start < startOfTomorrow))
+
+  let message = `${salutation}! `
+  if (todaysEvents.length === 0) {
+    message += 'No tenés eventos para hoy. '
+  } else if (todaysEvents.length === 1) {
+    const e = todaysEvents[0].event
+    message += `Hoy tenés "${e.summary}" ${formatTimeOnly(e.start, e.isAllDay).toLowerCase()}. `
+  } else {
+    const next = todaysEvents[0].event
+    message += `Hoy tenés ${todaysEvents.length} eventos, el próximo es "${next.summary}" a las ${formatTimeOnly(next.start, next.isAllDay)}. `
+  }
+
+  if (pendingClasses > 0) {
+    message += `Che, te faltan ${pendingClasses} clase${pendingClasses === 1 ? '' : 's'} del horario por sincronizar.`
+  } else {
+    message += '¿En qué te ayudo?'
+  }
+
+  return message.trim()
+}
+
 const MAX_TOOL_ROUNDS = 6
 
-export function useAgentChat({ accounts, events, schedule, refreshEvents }: Deps) {
+export function useAgentChat({ accounts, events, loading, schedule, refreshEvents }: Deps) {
   const [chatLog, setChatLog] = useState<ChatMessage[]>([])
   const [history, setHistory] = useState<AgentContent[]>([])
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isConfigured, setIsConfigured] = useState(true)
+  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(loadVoicePreference)
+  const hasGreetedRef = useRef(false)
 
   useEffect(() => {
     fetch('/api/health')
@@ -57,6 +106,35 @@ export function useAgentChat({ accounts, events, schedule, refreshEvents }: Deps
       .then((data) => setIsConfigured(Boolean(data.configured)))
       .catch(() => setIsConfigured(false))
   }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('agent-voice-enabled', String(voiceEnabled))
+    } catch {
+      // localStorage no disponible; se ignora
+    }
+  }, [voiceEnabled])
+
+  // Saluda una sola vez, apenas terminan de cargar los eventos (sin gastar cuota de la API).
+  useEffect(() => {
+    if (hasGreetedRef.current || loading || accounts.length === 0) return
+    hasGreetedRef.current = true
+    const greeting = buildGreeting(accounts, events, schedule.pendingCount)
+    setChatLog((prev) => (prev.length === 0 ? [{ role: 'assistant', text: greeting }] : prev))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, accounts.length])
+
+  const speak = useCallback(
+    (text: string) => {
+      if (!voiceEnabled) return
+      if (typeof window === 'undefined' || !window.speechSynthesis) return
+      window.speechSynthesis.cancel()
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.lang = 'es-ES'
+      window.speechSynthesis.speak(utterance)
+    },
+    [voiceEnabled],
+  )
 
   const buildContext = useCallback(
     () => ({
@@ -164,8 +242,10 @@ export function useAgentChat({ accounts, events, schedule, refreshEvents }: Deps
           const functionCalls = modelTurn.parts.filter(isFunctionCallPart)
           if (functionCalls.length === 0) {
             const textPart = modelTurn.parts.find(isTextPart)
-            setChatLog((prev) => [...prev, { role: 'assistant', text: textPart?.text ?? '(sin respuesta)' }])
+            const replyText = textPart?.text ?? '(sin respuesta)'
+            setChatLog((prev) => [...prev, { role: 'assistant', text: replyText }])
             setHistory(currentContents)
+            speak(replyText)
             return
           }
 
@@ -187,8 +267,8 @@ export function useAgentChat({ accounts, events, schedule, refreshEvents }: Deps
         setSending(false)
       }
     },
-    [callAgent, executeTool, history, sending],
+    [callAgent, executeTool, history, sending, speak],
   )
 
-  return { chatLog, sendMessage, sending, error, isConfigured }
+  return { chatLog, sendMessage, sending, error, isConfigured, voiceEnabled, setVoiceEnabled }
 }

@@ -543,6 +543,27 @@ body {
   transform: scale(1.06);
 }
 
+.agent-fab-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--danger);
+  border: 2px solid var(--bg);
+  animation: agent-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes agent-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+}
+
 .agent-panel {
   position: fixed;
   right: 20px;
@@ -567,6 +588,12 @@ body {
   font-weight: 700;
   background: linear-gradient(135deg, var(--primary-soft), transparent);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.agent-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .agent-warning {
@@ -650,6 +677,34 @@ body {
 
 .agent-input-row .text-input {
   margin-bottom: 0;
+}
+
+.mic-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-alt);
+  color: var(--text);
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.mic-btn:hover:not(:disabled) {
+  background: var(--surface-alt-hover);
+}
+
+.mic-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mic-btn.listening {
+  background: var(--danger);
+  color: white;
+  animation: agent-pulse 1.2s ease-in-out infinite;
 }
 
 @media (max-width: 480px) {

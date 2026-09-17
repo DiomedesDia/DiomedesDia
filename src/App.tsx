@@ -23,7 +23,7 @@ export default function App() {
   const [overrides, setOverrides] = useLocalStorage<Record<string, boolean>>('reminder-overrides', {})
   const { reminders, firedAlarms, dismissAlarm } = useReminders(events, offsetMinutes, overrides)
   const schedule = useClassSchedule(accounts)
-  const agent = useAgentChat({ accounts, events, schedule, refreshEvents: refresh })
+  const agent = useAgentChat({ accounts, events, loading, schedule, refreshEvents: refresh })
 
   const isLinked = accounts.length > 0
 
@@ -129,6 +129,8 @@ export default function App() {
         sending={agent.sending}
         error={agent.error}
         isConfigured={agent.isConfigured}
+        voiceEnabled={agent.voiceEnabled}
+        onToggleVoice={() => agent.setVoiceEnabled((v) => !v)}
       />
     </div>
   )
