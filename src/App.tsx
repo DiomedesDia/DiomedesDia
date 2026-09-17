@@ -104,6 +104,9 @@ export default function App() {
               </div>
             )
           )}
+        </div>
+
+        <div className="column">
           <ClassSchedule accounts={accounts} schedule={schedule} />
         </div>
 
